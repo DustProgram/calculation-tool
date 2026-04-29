@@ -491,6 +491,19 @@ ipcMain.handle('artisan:kpv:explain', async (_e, { params, ds }) => {
   catch (e) { return { ok: false, error: e.message }; }
 });
 
+ipcMain.handle('artisan:fraisReels:get', async () => {
+  try { return { ok: true, data: artisan.getFraisReels(requireSession()) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('artisan:fraisReels:set', async (_e, payload) => {
+  try { return { ok: true, data: artisan.setFraisReels(requireSession(), payload) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('artisan:fraisReels:compute', async (_e, payload) => {
+  try { return { ok: true, data: artisan.computeFraisReelsToKpv(payload) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
 // ------------------------------------------------------------------------
 // IPC : module Artisan / Étude — Matériel amorti (PARTAGÉ)
 // ------------------------------------------------------------------------

@@ -66,6 +66,11 @@ contextBridge.exposeInMainWorld('api', {
       setForLot: (p) => ipcRenderer.invoke('artisan:kpv:setForLot', p),
       explain: (p) => ipcRenderer.invoke('artisan:kpv:explain', p)
     },
+    fraisReels: {
+      get: () => ipcRenderer.invoke('artisan:fraisReels:get'),
+      set: (p) => ipcRenderer.invoke('artisan:fraisReels:set', p),
+      compute: (p) => ipcRenderer.invoke('artisan:fraisReels:compute', p)
+    },
     equipment: {
       list: (q) => ipcRenderer.invoke('artisan:equipment:list', q),
       get: (p) => ipcRenderer.invoke('artisan:equipment:get', p),
