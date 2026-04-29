@@ -198,6 +198,21 @@ function openUserDb(userId, dek) {
   const db = loadOrCreate(_userDbPath);
   const wrap = makeWrapper(db, _userDbPath);
   wrap.exec(SCHEMA_USER);
+  // Migrations silencieuses pour les bases créées avant l'ajout des nouvelles colonnes.
+  // SQLite ne supporte pas ALTER TABLE IF NOT EXISTS, donc on essaie et on ignore l'erreur
+  // si la colonne existe déjà.
+  const migrations = [
+    `ALTER TABLE composition_items ADD COLUMN categorie TEXT NOT NULL DEFAULT 'materiau'`,
+    `ALTER TABLE composition_items ADD COLUMN taux_perte REAL NOT NULL DEFAULT 0`,
+    `ALTER TABLE quotes ADD COLUMN client_adresse TEXT`,
+    `ALTER TABLE quotes ADD COLUMN kpv_mode TEXT NOT NULL DEFAULT 'fin'`,
+    `ALTER TABLE quotes ADD COLUMN kpv_pct REAL NOT NULL DEFAULT 0`,
+    `ALTER TABLE quotes ADD COLUMN tva_pct REAL NOT NULL DEFAULT 8.5`,
+    `ALTER TABLE quotes ADD COLUMN notes_bas_devis TEXT`
+  ];
+  migrations.forEach(sql => {
+    try { wrap.exec(sql); } catch (_) { /* colonne déjà présente */ }
+  });
   _userDb = wrap;
   _userDbId = userId;
   return _userDb;
@@ -275,8 +290,10 @@ const SCHEMA_USER = `
     composition_id INTEGER NOT NULL,
     price_id INTEGER,
     designation_libre TEXT,
+    categorie TEXT NOT NULL DEFAULT 'materiau',
     quantite REAL NOT NULL,
     prix_unitaire REAL NOT NULL,
+    taux_perte REAL NOT NULL DEFAULT 0,
     FOREIGN KEY (composition_id) REFERENCES compositions(id) ON DELETE CASCADE,
     FOREIGN KEY (price_id) REFERENCES prices(id) ON DELETE SET NULL
   );
@@ -287,8 +304,13 @@ const SCHEMA_USER = `
     titre TEXT NOT NULL,
     client_nom TEXT,
     client_email TEXT,
+    client_adresse TEXT,
     artisan_public_key TEXT,
     statut TEXT NOT NULL DEFAULT 'brouillon',
+    kpv_mode TEXT NOT NULL DEFAULT 'fin',
+    kpv_pct REAL NOT NULL DEFAULT 0,
+    tva_pct REAL NOT NULL DEFAULT 8.5,
+    notes_bas_devis TEXT,
     date_creation INTEGER NOT NULL,
     date_maj INTEGER NOT NULL
   );

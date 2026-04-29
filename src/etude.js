@@ -147,15 +147,32 @@ function bulkImportPrices(db, rows, { sourceLabel = 'import excel' } = {}) {
 }
 
 // =========================================================================
-// COMPOSITIONS / SOUS-DÉTAILS
+// COMPOSITIONS / SOUS-DÉTAILS (structure 3 parties : matériaux / matériel / MO)
 // =========================================================================
+
+const ITEM_CATEGORIES = ['materiau', 'materiel', 'mo'];
+
+// Calcule le coût d'un item (avec taux de perte intégré)
+function itemCost(it) {
+  const q = parseFloat(it.quantite) || 0;
+  const pu = parseFloat(it.prix_unitaire != null ? it.prix_unitaire : it.prixUnitaire) || 0;
+  const perte = parseFloat(it.taux_perte != null ? it.taux_perte : it.tauxPerte) || 0;
+  return q * pu * (1 + perte / 100);
+}
 
 function listCompositions(db) {
   const rows = db.prepare('SELECT * FROM compositions ORDER BY nom').all();
-  // Calcule le coût total de chaque composition
   return rows.map(c => {
-    const items = db.prepare('SELECT SUM(quantite * prix_unitaire) AS total FROM composition_items WHERE composition_id = ?').get(c.id);
-    return { ...c, total: items && items.total != null ? items.total : 0 };
+    const items = db.prepare('SELECT quantite, prix_unitaire, taux_perte, categorie FROM composition_items WHERE composition_id = ?').all(c.id);
+    let total = 0, materiau = 0, materiel = 0, mo = 0;
+    items.forEach(it => {
+      const cost = itemCost(it);
+      total += cost;
+      if (it.categorie === 'materiau') materiau += cost;
+      else if (it.categorie === 'materiel') materiel += cost;
+      else if (it.categorie === 'mo') mo += cost;
+    });
+    return { ...c, total, sous_totaux: { materiau, materiel, mo } };
   });
 }
 
@@ -170,9 +187,17 @@ function getComposition(db, id) {
     FROM composition_items ci
     LEFT JOIN prices p ON p.id = ci.price_id
     WHERE ci.composition_id = ?
-    ORDER BY ci.id
+    ORDER BY ci.categorie, ci.id
   `).all(id);
-  return { ...c, items };
+  let total = 0, materiau = 0, materiel = 0, mo = 0;
+  items.forEach(it => {
+    const cost = itemCost(it);
+    total += cost;
+    if (it.categorie === 'materiau') materiau += cost;
+    else if (it.categorie === 'materiel') materiel += cost;
+    else if (it.categorie === 'mo') mo += cost;
+  });
+  return { ...c, items, total, sous_totaux: { materiau, materiel, mo } };
 }
 
 function createComposition(db, { nom, unite, description, items }) {
@@ -181,11 +206,14 @@ function createComposition(db, { nom, unite, description, items }) {
   `).run(nom, unite || null, description || null, Date.now()).lastInsertRowid;
   if (Array.isArray(items)) {
     const stmt = db.prepare(`
-      INSERT INTO composition_items (composition_id, price_id, designation_libre, quantite, prix_unitaire)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO composition_items (composition_id, price_id, designation_libre, categorie, quantite, prix_unitaire, taux_perte)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
     items.forEach(it => {
-      stmt.run(cid, it.priceId || null, it.designationLibre || null, parseFloat(it.quantite) || 0, parseFloat(it.prixUnitaire) || 0);
+      const cat = ITEM_CATEGORIES.includes(it.categorie) ? it.categorie : 'materiau';
+      stmt.run(cid, it.priceId || null, it.designationLibre || null, cat,
+               parseFloat(it.quantite) || 0, parseFloat(it.prixUnitaire) || 0,
+               parseFloat(it.tauxPerte) || 0);
     });
   }
   return cid;
@@ -197,11 +225,14 @@ function updateComposition(db, id, { nom, unite, description, items }) {
   db.prepare('DELETE FROM composition_items WHERE composition_id = ?').run(id);
   if (Array.isArray(items)) {
     const stmt = db.prepare(`
-      INSERT INTO composition_items (composition_id, price_id, designation_libre, quantite, prix_unitaire)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO composition_items (composition_id, price_id, designation_libre, categorie, quantite, prix_unitaire, taux_perte)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
     items.forEach(it => {
-      stmt.run(id, it.priceId || null, it.designationLibre || null, parseFloat(it.quantite) || 0, parseFloat(it.prixUnitaire) || 0);
+      const cat = ITEM_CATEGORIES.includes(it.categorie) ? it.categorie : 'materiau';
+      stmt.run(id, it.priceId || null, it.designationLibre || null, cat,
+               parseFloat(it.quantite) || 0, parseFloat(it.prixUnitaire) || 0,
+               parseFloat(it.tauxPerte) || 0);
     });
   }
 }
@@ -211,8 +242,41 @@ function deleteComposition(db, id) {
 }
 
 // =========================================================================
-// DEVIS
+// DEVIS (avec KPV, TVA, totaux multiples)
 // =========================================================================
+
+// Calcul des totaux d'un devis à partir de ses lignes et settings
+// settings = { kpv_mode: 'integre'|'fin', kpv_pct, tva_pct }
+function computeQuoteTotals(lignes, settings) {
+  const debourse = (lignes || []).reduce((s, l) =>
+    s + (parseFloat(l.quantite) || 0) * (parseFloat(l.prixUnitaire) || 0), 0);
+  const kpvPct = parseFloat(settings && settings.kpv_pct) || 0;
+  const tvaPct = parseFloat(settings && settings.tva_pct) || 0;
+  const kpvMode = (settings && settings.kpv_mode) || 'fin';
+  let totalHT, frais = 0;
+  if (kpvMode === 'integre') {
+    // Le KPV est censé être déjà dans les PU. Mais on peut quand même l'appliquer ici
+    // si l'utilisateur a saisi des PU "déboursé" et veut un coef global.
+    totalHT = debourse * (1 + kpvPct / 100);
+    frais = totalHT - debourse;
+  } else {
+    // Mode 'fin' : on ajoute la marge en bas du devis
+    frais = debourse * (kpvPct / 100);
+    totalHT = debourse + frais;
+  }
+  const tva = totalHT * (tvaPct / 100);
+  const totalTTC = totalHT + tva;
+  return {
+    debourse: Math.round(debourse * 100) / 100,
+    frais: Math.round(frais * 100) / 100,
+    total_ht: Math.round(totalHT * 100) / 100,
+    tva: Math.round(tva * 100) / 100,
+    total_ttc: Math.round(totalTTC * 100) / 100,
+    kpv_mode: kpvMode,
+    kpv_pct: kpvPct,
+    tva_pct: tvaPct
+  };
+}
 
 function listQuotes(db) {
   return db.prepare(`
@@ -230,20 +294,29 @@ function getQuote(db, id) {
   const versions = db.prepare(`
     SELECT id, numero, snapshot, created_at FROM quote_versions WHERE quote_id = ? ORDER BY numero
   `).all(id);
-  // Parse les snapshots
   versions.forEach(v => {
     try { v.snapshot = JSON.parse(v.snapshot); } catch (_) { v.snapshot = null; }
   });
+  // Calcule les totaux pour la dernière version
+  const settings = { kpv_mode: q.kpv_mode, kpv_pct: q.kpv_pct, tva_pct: q.tva_pct };
+  const lastVersion = versions[versions.length - 1];
+  if (lastVersion && lastVersion.snapshot) {
+    lastVersion.totals = computeQuoteTotals(lastVersion.snapshot.lignes, settings);
+  }
   return { ...q, versions };
 }
 
-function createQuote(db, { code, titre, clientNom, clientEmail, lignes }) {
+function createQuote(db, payload) {
+  const { code, titre, clientNom, clientEmail, clientAdresse, kpvMode, kpvPct, tvaPct, notesBasDevis, lignes } = payload;
   const now = Date.now();
   const qid = db.prepare(`
-    INSERT INTO quotes (code, titre, client_nom, client_email, statut, date_creation, date_maj)
-    VALUES (?, ?, ?, ?, 'brouillon', ?, ?)
-  `).run(code || null, titre, clientNom || null, clientEmail || null, now, now).lastInsertRowid;
-  // Crée la version 1
+    INSERT INTO quotes (code, titre, client_nom, client_email, client_adresse, statut, kpv_mode, kpv_pct, tva_pct, notes_bas_devis, date_creation, date_maj)
+    VALUES (?, ?, ?, ?, ?, 'brouillon', ?, ?, ?, ?, ?, ?)
+  `).run(
+    code || null, titre, clientNom || null, clientEmail || null, clientAdresse || null,
+    kpvMode || 'fin', parseFloat(kpvPct) || 0, parseFloat(tvaPct) || 8.5,
+    notesBasDevis || null, now, now
+  ).lastInsertRowid;
   db.prepare(`
     INSERT INTO quote_versions (quote_id, numero, snapshot, created_at)
     VALUES (?, 1, ?, ?)
@@ -251,14 +324,20 @@ function createQuote(db, { code, titre, clientNom, clientEmail, lignes }) {
   return qid;
 }
 
-function updateQuoteMeta(db, id, { code, titre, clientNom, clientEmail, statut }) {
+function updateQuoteMeta(db, id, payload) {
+  const { code, titre, clientNom, clientEmail, clientAdresse, statut, kpvMode, kpvPct, tvaPct, notesBasDevis } = payload;
   const fields = [];
   const params = [];
-  if (code !== undefined) { fields.push('code = ?'); params.push(code || null); }
-  if (titre !== undefined) { fields.push('titre = ?'); params.push(titre); }
-  if (clientNom !== undefined) { fields.push('client_nom = ?'); params.push(clientNom || null); }
-  if (clientEmail !== undefined) { fields.push('client_email = ?'); params.push(clientEmail || null); }
-  if (statut !== undefined) { fields.push('statut = ?'); params.push(statut); }
+  if (code !== undefined)         { fields.push('code = ?');          params.push(code || null); }
+  if (titre !== undefined)        { fields.push('titre = ?');         params.push(titre); }
+  if (clientNom !== undefined)    { fields.push('client_nom = ?');    params.push(clientNom || null); }
+  if (clientEmail !== undefined)  { fields.push('client_email = ?');  params.push(clientEmail || null); }
+  if (clientAdresse !== undefined){ fields.push('client_adresse = ?');params.push(clientAdresse || null); }
+  if (statut !== undefined)       { fields.push('statut = ?');        params.push(statut); }
+  if (kpvMode !== undefined)      { fields.push('kpv_mode = ?');      params.push(kpvMode); }
+  if (kpvPct !== undefined)       { fields.push('kpv_pct = ?');       params.push(parseFloat(kpvPct) || 0); }
+  if (tvaPct !== undefined)       { fields.push('tva_pct = ?');       params.push(parseFloat(tvaPct) || 0); }
+  if (notesBasDevis !== undefined){ fields.push('notes_bas_devis = ?');params.push(notesBasDevis || null); }
   if (!fields.length) return;
   fields.push('date_maj = ?'); params.push(Date.now());
   params.push(id);
@@ -390,8 +469,10 @@ module.exports = {
   listPrices, countPrices, createPrice, updatePrice, deletePrice, deletePricesAll, bulkImportPrices,
   // Compositions
   listCompositions, getComposition, createComposition, updateComposition, deleteComposition,
+  ITEM_CATEGORIES, itemCost,
   // Devis
   listQuotes, getQuote, createQuote, updateQuoteMeta, addQuoteVersion, deleteQuote, diffVersions,
+  computeQuoteTotals,
   // Indexation
   previewReindex, applyReindex, getReindexHistory
 };
