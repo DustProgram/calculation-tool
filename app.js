@@ -297,39 +297,50 @@ const PAGES = {
   'etude-home': () => `
     <h1>Tableau de bord — Étude de prix</h1>
     <p>Bienvenue ${escapeHtml(currentUser.displayName || currentUser.login)}.</p>
-    <div class="kpi-grid">
-      <div class="kpi-card"><div class="kpi-label">Prix en base</div><div class="kpi-value">0</div></div>
-      <div class="kpi-card"><div class="kpi-label">Compositions</div><div class="kpi-value">0</div></div>
-      <div class="kpi-card"><div class="kpi-label">Devis en cours</div><div class="kpi-value">0</div></div>
-      <div class="kpi-card"><div class="kpi-label">Devis envoyés</div><div class="kpi-value">0</div></div>
-    </div>
-    <div class="placeholder-card">
-      <div class="emoji">🚧</div>
-      <p>Les modules métier seront branchés en Phase 1. Pour l'instant, tu peux explorer l'arborescence dans la barre latérale.</p>
+    <div class="kpi-grid" id="etude-home-kpis">
+      <div class="kpi-card"><div class="kpi-label">Prix en base</div><div class="kpi-value">…</div></div>
+      <div class="kpi-card"><div class="kpi-label">Compositions</div><div class="kpi-value">…</div></div>
+      <div class="kpi-card"><div class="kpi-label">Devis</div><div class="kpi-value">…</div></div>
+      <div class="kpi-card"><div class="kpi-label">Lots</div><div class="kpi-value">…</div></div>
     </div>`,
-  'etude-prices': () => placeholder('💶 Base de prix', 1,
-    'Catalogue interne de prix (style BatiPrix). Import Excel en masse, recherche, filtres par lot/projet/année, édition inline, détection des anomalies (hors plage min-max), historique de prix.'),
-  'etude-compos': () => placeholder('🧱 Compositions / sous-détails', 1,
-    'Création de compositions réutilisables (ex: 1 m² de mur parpaing = X parpaings + Y kg ciment + Z h MO). Insertion dans les devis comme un bloc unitaire.'),
-  'etude-quotes': () => placeholder('📄 Devis', 1,
-    'Création de devis HT, sélection du client artisan, application automatique du KPV (par ligne ou en bas), versions multiples avec diff visuel, export PDF, export .ndev pour envoi à l\'artisan.'),
-  'etude-index': () => placeholder('📈 Indexation BT01 / ILC', 1,
-    'Application d\'un coefficient de révision officiel (BT01, ILC, ILAT…) sur tout ou partie de la base de prix pour mettre à jour les prix selon l\'inflation des indices.')
+
+  // Pages avancées : on délègue au module dédié
+  'etude-prices': null,  // gérée par EtudePricesPage.render()
+  'etude-compos': null,
+  'etude-quotes': null,
+  'etude-index':  null
 };
 
-function placeholder(title, phase, description) {
-  return `
-    <h1>${title}<span class="badge phase${phase}">Phase ${phase}</span></h1>
-    <p>${description}</p>
-    <div class="placeholder-card">
-      <div class="emoji">🚧</div>
-      <p>Module à implémenter en Phase ${phase}.</p>
-    </div>`;
-}
+async function renderPage(pageId) {
+  const content = $('#content');
+  // Pages avancées : on délègue
+  if (pageId === 'etude-prices' && window.EtudePricesPage) return window.EtudePricesPage.render(content);
+  if (pageId === 'etude-compos' && window.EtudeComposPage) return window.EtudeComposPage.render(content);
+  if (pageId === 'etude-quotes' && window.EtudeQuotesPage) return window.EtudeQuotesPage.render(content);
+  if (pageId === 'etude-index'  && window.EtudeIndexPage)  return window.EtudeIndexPage.render(content);
 
-function renderPage(pageId) {
   const renderer = PAGES[pageId];
-  $('#content').innerHTML = renderer ? renderer() : `<h1>Page inconnue</h1>`;
+  content.innerHTML = renderer ? renderer() : `<h1>Page inconnue</h1>`;
+
+  // Cas spécial : home étude → on charge les vrais KPI
+  if (pageId === 'etude-home') {
+    try {
+      const [pr, cr, qr, lr] = await Promise.all([
+        window.api.etude.prices.list({}),
+        window.api.etude.compos.list(),
+        window.api.etude.quotes.list(),
+        window.api.etude.lots.list()
+      ]);
+      const kpis = $('#etude-home-kpis');
+      if (kpis) {
+        const cells = kpis.querySelectorAll('.kpi-value');
+        cells[0].textContent = pr.ok ? pr.total : '—';
+        cells[1].textContent = cr.ok ? cr.data.length : '—';
+        cells[2].textContent = qr.ok ? qr.data.length : '—';
+        cells[3].textContent = lr.ok ? lr.data.length : '—';
+      }
+    } catch (_) {}
+  }
 }
 
 // =========================================================================

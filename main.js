@@ -9,6 +9,9 @@ const { autoUpdater } = require('electron-updater');
 const cryptoMod = require('./src/crypto');
 const dbMod = require('./src/db');
 const ndev = require('./src/ndev');
+const etude = require('./src/etude');
+const excelMod = require('./src/excel');
+const pdfMod = require('./src/pdf');
 
 let mainWindow = null;
 let session = null; // { userId, profil, masterKey } après login
@@ -269,6 +272,191 @@ ipcMain.handle('profil:set', async (_evt, profil) => {
   if (!['artisan', 'etude'].includes(profil)) return { ok: false, error: 'Profil invalide.' };
   session.profil = profil;
   return { ok: true };
+});
+
+// ------------------------------------------------------------------------
+// IPC : module Étude — Lots
+// ------------------------------------------------------------------------
+
+function requireSession() {
+  if (!session) throw new Error('Non connecté.');
+  return dbMod.userDb();
+}
+
+ipcMain.handle('etude:lots:list', async () => {
+  try { return { ok: true, data: etude.listLots(requireSession()) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('etude:lots:create', async (_e, payload) => {
+  try { return { ok: true, id: etude.createLot(requireSession(), payload) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('etude:lots:update', async (_e, { id, ...payload }) => {
+  try { etude.updateLot(requireSession(), id, payload); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('etude:lots:delete', async (_e, { id }) => {
+  try { etude.deleteLot(requireSession(), id); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+// ------------------------------------------------------------------------
+// IPC : module Étude — Prix
+// ------------------------------------------------------------------------
+
+ipcMain.handle('etude:prices:list', async (_e, query) => {
+  try {
+    const db = requireSession();
+    return { ok: true, data: etude.listPrices(db, query || {}), total: etude.countPrices(db) };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('etude:prices:create', async (_e, payload) => {
+  try { return { ok: true, id: etude.createPrice(requireSession(), payload) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('etude:prices:update', async (_e, { id, ...payload }) => {
+  try { etude.updatePrice(requireSession(), id, payload); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('etude:prices:delete', async (_e, { id }) => {
+  try { etude.deletePrice(requireSession(), id); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+// Import Excel : 2 étapes — preview puis import
+ipcMain.handle('etude:prices:excelPreview', async () => {
+  try {
+    requireSession();
+    const r = await dialog.showOpenDialog(mainWindow, {
+      title: 'Sélectionner un fichier Excel',
+      filters: [{ name: 'Excel', extensions: ['xlsx', 'xls', 'xlsm'] }],
+      properties: ['openFile']
+    });
+    if (r.canceled || !r.filePaths[0]) return { ok: false, canceled: true };
+    const data = excelMod.readExcelFile(r.filePaths[0]);
+    return { ok: true, filePath: r.filePaths[0], ...data };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('etude:prices:excelLoadSheet', async (_e, { filePath, sheet }) => {
+  try {
+    requireSession();
+    return { ok: true, ...excelMod.readWorkbookSheet(filePath, sheet) };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('etude:prices:excelImport', async (_e, { rows, mapping, replaceExisting }) => {
+  try {
+    const db = requireSession();
+    if (replaceExisting) etude.deletePricesAll(db);
+    const mapped = excelMod.applyMapping(rows, mapping);
+    const result = etude.bulkImportPrices(db, mapped);
+    return { ok: true, ...result };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('etude:prices:exportExcel', async () => {
+  try {
+    const db = requireSession();
+    const r = await dialog.showSaveDialog(mainWindow, {
+      title: 'Exporter la base de prix',
+      defaultPath: `base-prix-${Date.now()}.xlsx`,
+      filters: [{ name: 'Excel', extensions: ['xlsx'] }]
+    });
+    if (r.canceled) return { ok: false, canceled: true };
+    const all = etude.listPrices(db, {});
+    excelMod.exportPricesToExcel(all, r.filePath);
+    return { ok: true, path: r.filePath };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+// ------------------------------------------------------------------------
+// IPC : module Étude — Compositions
+// ------------------------------------------------------------------------
+
+ipcMain.handle('etude:compos:list', async () => {
+  try { return { ok: true, data: etude.listCompositions(requireSession()) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('etude:compos:get', async (_e, { id }) => {
+  try { return { ok: true, data: etude.getComposition(requireSession(), id) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('etude:compos:create', async (_e, payload) => {
+  try { return { ok: true, id: etude.createComposition(requireSession(), payload) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('etude:compos:update', async (_e, { id, ...payload }) => {
+  try { etude.updateComposition(requireSession(), id, payload); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('etude:compos:delete', async (_e, { id }) => {
+  try { etude.deleteComposition(requireSession(), id); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+// ------------------------------------------------------------------------
+// IPC : module Étude — Devis
+// ------------------------------------------------------------------------
+
+ipcMain.handle('etude:quotes:list', async () => {
+  try { return { ok: true, data: etude.listQuotes(requireSession()) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('etude:quotes:get', async (_e, { id }) => {
+  try { return { ok: true, data: etude.getQuote(requireSession(), id) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('etude:quotes:create', async (_e, payload) => {
+  try { return { ok: true, id: etude.createQuote(requireSession(), payload) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('etude:quotes:updateMeta', async (_e, { id, ...payload }) => {
+  try { etude.updateQuoteMeta(requireSession(), id, payload); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('etude:quotes:addVersion', async (_e, { id, lignes }) => {
+  try { return { ok: true, numero: etude.addQuoteVersion(requireSession(), id, lignes) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('etude:quotes:delete', async (_e, { id }) => {
+  try { etude.deleteQuote(requireSession(), id); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('etude:quotes:diff', async (_e, { vA, vB }) => {
+  try { return { ok: true, data: etude.diffVersions(vA, vB) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('etude:quotes:exportPdf', async (_e, { quoteId, versionNumero }) => {
+  try {
+    const db = requireSession();
+    const q = etude.getQuote(db, quoteId);
+    if (!q) throw new Error('Devis introuvable.');
+    const v = q.versions.find(vv => vv.numero === versionNumero) || q.versions[q.versions.length - 1];
+    if (!v) throw new Error('Version introuvable.');
+    const r = await dialog.showSaveDialog(mainWindow, {
+      title: 'Exporter le devis en PDF',
+      defaultPath: `devis-${q.code || q.id}-v${v.numero}.pdf`,
+      filters: [{ name: 'PDF', extensions: ['pdf'] }]
+    });
+    if (r.canceled) return { ok: false, canceled: true };
+    await pdfMod.generateQuotePdf(q, v, (v.snapshot && v.snapshot.lignes) || [], r.filePath);
+    return { ok: true, path: r.filePath };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+// ------------------------------------------------------------------------
+// IPC : module Étude — Indexation
+// ------------------------------------------------------------------------
+
+ipcMain.handle('etude:reindex:preview', async (_e, payload) => {
+  try { return { ok: true, data: etude.previewReindex(requireSession(), payload) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('etude:reindex:apply', async (_e, payload) => {
+  try { return { ok: true, log: etude.applyReindex(requireSession(), payload) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('etude:reindex:history', async () => {
+  try { return { ok: true, data: etude.getReindexHistory(requireSession()) }; }
+  catch (e) { return { ok: false, error: e.message }; }
 });
 
 // ------------------------------------------------------------------------
