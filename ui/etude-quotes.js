@@ -122,11 +122,11 @@
     let workingLignes = [];
     let viewingVersion = null;
 
-    // Settings courants (avec valeurs par défaut sensées pour Martinique)
+    // Settings courants (avec valeurs par défaut)
     let settings = {
       kpv_mode: (quote && quote.kpv_mode) || 'fin',
       kpv_pct: quote ? (quote.kpv_pct || 0) : 25,
-      tva_pct: quote ? (quote.tva_pct || 8.5) : 8.5
+      tva_pct: quote ? (quote.tva_pct || 20) : 20
     };
 
     if (isEdit && quote.versions && quote.versions.length) {
@@ -175,7 +175,7 @@
               </label>
               <label class="full">TVA (%)
                 <input id="q-tva" type="number" step="0.1" value="${settings.tva_pct}">
-                <small class="muted">DOM-TOM : 8.5% &nbsp;·&nbsp; Métropole : 20% &nbsp;·&nbsp; Travaux rénovation : 10% ou 5.5%</small>
+                <small class="muted">Taux courants : 20% (taux normal) &nbsp;·&nbsp; 10% (rénovation) &nbsp;·&nbsp; 8.5% (DOM-TOM) &nbsp;·&nbsp; 5.5% (rénovation énergétique)</small>
               </label>
             </div>
             <p class="kpv-note muted small" id="kpv-explainer"></p>

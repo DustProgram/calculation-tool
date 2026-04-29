@@ -35,7 +35,7 @@
         <p class="muted small">Ta clé publique permet à un Bureau d'Études de t'envoyer des devis chiffrés .ndev. Donne-la à tes partenaires (par email, QR code, ou copier-coller).</p>
         ${myId ? `
           <label>Libellé affiché aux destinataires
-            <input id="id-label" value="${escapeHtml(myId.label || '')}" placeholder="ex: Roland — PROMORAME">
+            <input id="id-label" value="${escapeHtml(myId.label || '')}" placeholder="ex: ton nom + nom de l'entreprise">
           </label>
           <label class="full" style="margin-top:10px">Ta clé publique (à partager)
             <textarea id="id-pub" readonly rows="3" style="font-family:monospace;font-size:11px;background:var(--bg-2)">${escapeHtml(myId.pub_shareable)}</textarea>
@@ -120,6 +120,18 @@
           <button class="btn ghost" id="btn-activate-editor">🔑 Activer le mode éditeur</button>
         </div>
       `}
+
+      <div class="card-block about-block">
+        <h3>ℹ️ À propos</h3>
+        <p>
+          <strong>Nucléar Estim</strong> — Logiciel de chiffrage d'opérations et études de prix BTP.<br>
+          <span class="muted small">Version <span id="about-version">…</span></span>
+        </p>
+        <p class="muted small" style="margin-top:8px">
+          Conçu et développé par <strong>Nathan RAMEDACE</strong>.<br>
+          © 2026 — Tous droits réservés.
+        </p>
+      </div>
     `;
 
     // BIND : TOTP
@@ -197,6 +209,14 @@
     };
     const btnGenLic = $('#btn-gen-lic');
     if (btnGenLic) btnGenLic.onclick = openGenerateLicenseModal;
+
+    // Affichage de la version
+    if (window.api.app && window.api.app.version) {
+      window.api.app.version().then(v => {
+        const el = $('#about-version');
+        if (el && v) el.textContent = v;
+      });
+    }
   }
 
   // -----------------------------------------------------------------------
@@ -439,10 +459,10 @@
       content: `
         <div class="form-grid">
           <label class="full">Émis pour (nom du destinataire) *
-            <input id="g-name" placeholder="ex: Jean Dupont — SARL Plomberie Express">
+            <input id="g-name" placeholder="ex: nom + raison sociale du client">
           </label>
           <label class="full">Identifiant unique
-            <input id="g-uid" placeholder="ex: dupont-plombier (laisse vide pour auto)">
+            <input id="g-uid" placeholder="ex: client-001 (laisse vide pour auto)">
           </label>
           <label>Modules autorisés *</label>
           <div></div>
@@ -458,7 +478,7 @@
             <input id="g-exp" type="date">
           </label>
           <label class="full">Note interne (optionnel, visible nulle part sauf à toi)
-            <input id="g-note" placeholder="ex: Achat 2026-04-29 — Paypal 250€">
+            <input id="g-note" placeholder="ex: Achat — Facture n°XXX">
           </label>
         </div>
       `,

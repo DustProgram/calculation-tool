@@ -314,7 +314,7 @@ function createQuote(db, payload) {
     VALUES (?, ?, ?, ?, ?, 'brouillon', ?, ?, ?, ?, ?, ?)
   `).run(
     code || null, titre, clientNom || null, clientEmail || null, clientAdresse || null,
-    kpvMode || 'fin', parseFloat(kpvPct) || 0, parseFloat(tvaPct) || 8.5,
+    kpvMode || 'fin', parseFloat(kpvPct) || 0, parseFloat(tvaPct) || 20,
     notesBasDevis || null, now, now
   ).lastInsertRowid;
   db.prepare(`

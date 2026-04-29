@@ -59,7 +59,7 @@ const DEFAULT_CONFIG = {
   ape: '',
   adresse: '',
   regime_tva: 'reel_simplifie',     // 'franchise', 'reel_simplifie', 'reel_normal'
-  tva_pct_defaut: 8.5,
+  tva_pct_defaut: 20,
   exercice_debut_mm: 1,             // mois de début d'exercice (1=janvier, 7=juillet, etc.)
   exercice_debut_jj: 1,             // jour de début
   methode_chantier: 'avancement',   // 'avancement' ou 'achevement'
@@ -213,7 +213,7 @@ function createSituation(db, payload) {
   `).get(site_id, date || Date.now());
   const montantPeriode = Math.round((montantCumule - (previous.total || 0)) * 100) / 100;
 
-  const tvaP = parseFloat(tva_pct) || 8.5;
+  const tvaP = parseFloat(tva_pct) || 20;
   const tvaM = Math.round(montantPeriode * tvaP) / 100;
   const ttc = Math.round((montantPeriode + tvaM) * 100) / 100;
 

@@ -292,7 +292,7 @@
           </label>
           <label class="full">Libellé *<input id="f-libelle" value="${escapeHtml(ec && ec.libelle || '')}"></label>
           <label>Montant HT *<input id="f-ht" type="number" step="0.01" value="${ec && ec.montant_ht != null ? ec.montant_ht : ''}"></label>
-          <label>TVA %<input id="f-tva" type="number" step="0.1" value="${ec && ec.tva_pct != null ? ec.tva_pct : (config && config.tva_pct_defaut || 8.5)}"></label>
+          <label>TVA %<input id="f-tva" type="number" step="0.1" value="${ec && ec.tva_pct != null ? ec.tva_pct : (config && config.tva_pct_defaut || 20)}"></label>
           ${isRec ? `
             <label>Nom client<input id="f-client" value="${escapeHtml(ec && ec.client_nom || '')}"></label>
             <label>Devis lié
@@ -474,7 +474,7 @@
             <input id="s-pct" type="number" step="0.5" min="0" max="100" value="0">
             <small class="muted">Pourcentage TOTAL de l'avancement (ex: 30, puis 60, puis 100). Le montant période sera calculé auto.</small>
           </label>
-          <label>TVA %<input id="s-tva" type="number" step="0.1" value="${config && config.tva_pct_defaut || 8.5}"></label>
+          <label>TVA %<input id="s-tva" type="number" step="0.1" value="${config && config.tva_pct_defaut || 20}"></label>
           <label>Date paiement<input id="s-pay" type="date"></label>
           <label class="full">Notes<textarea id="s-notes" rows="2"></textarea></label>
         </div>
@@ -640,8 +640,8 @@
             </select>
           </label>
           <label>TVA par défaut (%)
-            <input id="c-tva-pct" type="number" step="0.1" value="${c.tva_pct_defaut || 8.5}">
-            <small class="muted">DOM-TOM 8.5% · Métropole 20% · Travaux rénovation 10%</small>
+            <input id="c-tva-pct" type="number" step="0.1" value="${c.tva_pct_defaut || 20}">
+            <small class="muted">Taux courants : 20% (taux normal) · 10% (rénovation) · 8.5% (DOM-TOM) · 5.5% (rénovation énergétique)</small>
           </label>
         </div>
       </div>
@@ -682,7 +682,7 @@
         ape: $('#c-ape').value.trim(),
         adresse: $('#c-adr').value.trim(),
         regime_tva: $('#c-tva-reg').value,
-        tva_pct_defaut: parseFloat($('#c-tva-pct').value) || 8.5,
+        tva_pct_defaut: parseFloat($('#c-tva-pct').value) || 20,
         exercice_debut_mm: parseInt($('#c-ex-mm').value, 10) || 1,
         exercice_debut_jj: parseInt($('#c-ex-jj').value, 10) || 1,
         methode_chantier: $('input[name="c-meth"]:checked').value

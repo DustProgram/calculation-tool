@@ -143,10 +143,88 @@ function createWindow() {
     session = null;
   });
 
-  // Menu réduit pour l'instant
-  if (process.platform !== 'darwin') {
+  // Menu : caché sur Windows/Linux (UI custom), natif sur macOS (convention Apple)
+  if (process.platform === 'darwin') {
+    setupMacMenu();
+  } else {
     mainWindow.setMenu(null);
   }
+}
+
+// Configure le menu standard macOS (Cmd+Q, Cmd+W, copier/coller, etc.)
+function setupMacMenu() {
+  const { Menu } = require('electron');
+  const appName = 'Nucléar Estim';
+  const template = [
+    {
+      label: appName,
+      submenu: [
+        { label: `À propos de ${appName}`, role: 'about' },
+        { type: 'separator' },
+        { label: 'Préférences…', accelerator: 'CmdOrCtrl+,', click: () => {
+          if (mainWindow) mainWindow.webContents.send('menu:openAccount');
+        }},
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide', label: `Masquer ${appName}` },
+        { role: 'hideOthers', label: 'Masquer les autres' },
+        { role: 'unhide', label: 'Tout afficher' },
+        { type: 'separator' },
+        { role: 'quit', label: `Quitter ${appName}` }
+      ]
+    },
+    {
+      label: 'Édition',
+      submenu: [
+        { role: 'undo', label: 'Annuler' },
+        { role: 'redo', label: 'Rétablir' },
+        { type: 'separator' },
+        { role: 'cut', label: 'Couper' },
+        { role: 'copy', label: 'Copier' },
+        { role: 'paste', label: 'Coller' },
+        { role: 'selectAll', label: 'Tout sélectionner' }
+      ]
+    },
+    {
+      label: 'Fichier',
+      submenu: [
+        { label: 'Importer un .ndev…', click: () => mainWindow && mainWindow.webContents.send('menu:importNdev') },
+        { label: 'Importer une licence .nelic…', click: () => mainWindow && mainWindow.webContents.send('menu:importLicense') },
+        { type: 'separator' },
+        { role: 'close', label: 'Fermer la fenêtre' }
+      ]
+    },
+    {
+      label: 'Affichage',
+      submenu: [
+        { role: 'reload', label: 'Recharger' },
+        { role: 'toggleDevTools', label: 'Outils développeur' },
+        { type: 'separator' },
+        { role: 'resetZoom', label: 'Taille réelle' },
+        { role: 'zoomIn', label: 'Agrandir' },
+        { role: 'zoomOut', label: 'Réduire' },
+        { type: 'separator' },
+        { role: 'togglefullscreen', label: 'Plein écran' }
+      ]
+    },
+    {
+      label: 'Fenêtre',
+      submenu: [
+        { role: 'minimize', label: 'Réduire' },
+        { role: 'zoom', label: 'Agrandir/Restaurer' },
+        { type: 'separator' },
+        { role: 'front', label: 'Tout ramener au premier plan' }
+      ]
+    },
+    {
+      label: 'Aide',
+      submenu: [
+        { label: 'À propos de Nucléar Estim', click: () => mainWindow && mainWindow.webContents.send('menu:openAbout') }
+      ]
+    }
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
 // ------------------------------------------------------------------------

@@ -724,6 +724,18 @@ input, textarea, select {
   animation: modal-shake 0.4s ease-in-out;
 }
 
+/* Bloc "À propos" en bas de la page Compte & Sécurité */
+.about-block {
+  text-align: center;
+  background: var(--bg-2);
+  margin-top: 24px;
+}
+
+.about-block h3 {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
 .modal-header {
   display: flex;
   justify-content: space-between;

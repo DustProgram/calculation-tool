@@ -14,7 +14,14 @@
     "start": "electron .",
     "build": "electron-builder",
     "build:win": "electron-builder --win",
-    "publish": "electron-builder --win --publish always"
+    "build:mac": "electron-builder --mac",
+    "build:mac-arm": "electron-builder --mac --arm64",
+    "build:mac-intel": "electron-builder --mac --x64",
+    "build:linux": "electron-builder --linux",
+    "build:all": "node scripts/build-all.js",
+    "publish:win": "electron-builder --win --publish always",
+    "publish:mac": "electron-builder --mac --publish always",
+    "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
     "sql.js": "^1.11.0",
@@ -30,6 +37,7 @@
   "build": {
     "appId": "com.nuclear.estim",
     "productName": "Nucléar Estim",
+    "copyright": "© 2026 Nathan RAMEDACE",
     "files": [
       "main.js",
       "preload.js",
@@ -47,7 +55,7 @@
     ],
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] }
+        { "target": "nsis", "arch": ["x64", "arm64"] }
       ]
     },
     "nsis": {
@@ -55,6 +63,53 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
-    }
+    },
+    "mac": {
+      "category": "public.app-category.business",
+      "target": [
+        { "target": "dmg", "arch": ["arm64", "x64"] },
+        { "target": "zip", "arch": ["arm64", "x64"] }
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSDesktopFolderUsageDescription": "Nucléar Estim peut accéder au Bureau pour exporter des fichiers .ndev, .nelic, PDF ou Excel.",
+        "NSDocumentsFolderUsageDescription": "Nucléar Estim peut accéder à Documents pour ouvrir et enregistrer vos devis et exports.",
+        "NSDownloadsFolderUsageDescription": "Nucléar Estim peut accéder aux Téléchargements pour ouvrir les fichiers .ndev et .nelic reçus."
+      }
+    },
+    "dmg": {
+      "title": "Nucléar Estim ${version}",
+      "icon": "build/icon.icns",
+      "background": null,
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ],
+      "window": { "width": 540, "height": 380 }
+    },
+    "linux": {
+      "target": [
+        { "target": "AppImage", "arch": ["x64", "arm64"] },
+        { "target": "deb", "arch": ["x64", "arm64"] }
+      ],
+      "category": "Office"
+    },
+    "fileAssociations": [
+      {
+        "ext": "ndev",
+        "name": "Devis Nucléar Estim chiffré",
+        "description": "Devis chiffré échangé entre BE et Artisans",
+        "role": "Editor"
+      },
+      {
+        "ext": "nelic",
+        "name": "Licence Nucléar Estim",
+        "description": "Fichier de licence pour débloquer les modules",
+        "role": "Viewer"
+      }
+    ]
   }
 }

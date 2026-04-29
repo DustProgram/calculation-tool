@@ -209,7 +209,7 @@ function openUserDb(userId, dek) {
     `ALTER TABLE quotes ADD COLUMN kpv_mode TEXT NOT NULL DEFAULT 'fin'`,
     `ALTER TABLE quotes ADD COLUMN kpv_unit TEXT NOT NULL DEFAULT 'pct'`,
     `ALTER TABLE quotes ADD COLUMN kpv_pct REAL NOT NULL DEFAULT 0`,
-    `ALTER TABLE quotes ADD COLUMN tva_pct REAL NOT NULL DEFAULT 8.5`,
+    `ALTER TABLE quotes ADD COLUMN tva_pct REAL NOT NULL DEFAULT 20`,
     `ALTER TABLE quotes ADD COLUMN notes_bas_devis TEXT`,
     // Phase 2 : compléments
     `ALTER TABLE suppliers ADD COLUMN telephone TEXT`,
@@ -325,7 +325,7 @@ const SCHEMA_USER = `
     kpv_mode TEXT NOT NULL DEFAULT 'fin',
     kpv_unit TEXT NOT NULL DEFAULT 'pct',
     kpv_pct REAL NOT NULL DEFAULT 0,
-    tva_pct REAL NOT NULL DEFAULT 8.5,
+    tva_pct REAL NOT NULL DEFAULT 20,
     notes_bas_devis TEXT,
     date_creation INTEGER NOT NULL,
     date_maj INTEGER NOT NULL
@@ -432,7 +432,7 @@ const SCHEMA_USER = `
     date INTEGER NOT NULL,
     pct_avancement_cumule REAL NOT NULL,  -- ex: 30, 60, 100
     montant_ht_periode REAL NOT NULL,     -- montant facturé sur cette période
-    tva_pct REAL NOT NULL DEFAULT 8.5,
+    tva_pct REAL NOT NULL DEFAULT 20,
     montant_ttc_periode REAL NOT NULL,
     date_paiement INTEGER,                -- quand le client a payé
     notes TEXT,
@@ -471,7 +471,7 @@ const SCHEMA_USER = `
     master_private_key BLOB,
     x25519_private BLOB,        -- clé privée X25519 chiffrée par DEK (échange .ndev)
     x25519_public BLOB,         -- clé publique X25519 (en clair, partageable)
-    x25519_label TEXT,          -- libellé identité (ex: "Roland — PROMORAME")
+    x25519_label TEXT,          -- libellé identité utilisateur
     CHECK (id = 1)
   );
   INSERT OR IGNORE INTO user_secrets (id) VALUES (1);
@@ -483,7 +483,7 @@ const SCHEMA_USER = `
   -- Carnet d'adresses des artisans (côté BE/Étude)
   CREATE TABLE IF NOT EXISTS contacts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    label TEXT NOT NULL,            -- "Jean Dupont — SARL Plomberie Express"
+    label TEXT NOT NULL,             -- nom complet ou raison sociale de l'artisan
     metier TEXT,                     -- "Plomberie", "Électricité", etc.
     email TEXT,
     telephone TEXT,
@@ -498,7 +498,7 @@ const SCHEMA_USER = `
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sender_label TEXT,                -- libellé du BE émetteur
     sender_pub TEXT,                  -- clé publique de l'émetteur (pour identifier)
-    subject TEXT,                     -- ex: "DEV-2026-001 — Villa Dupont"
+    subject TEXT,                     -- sujet du devis envoyé
     received_at INTEGER NOT NULL,
     issued_at INTEGER,                -- date d'envoi par le BE
     payload TEXT NOT NULL,            -- JSON déchiffré (devis complet)

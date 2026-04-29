@@ -1,162 +1,130 @@
 # Nucléar Estim
 
-Application desktop (Electron) de chiffrage d'opérations et d'études de prix.
-Architecture **1 application / 2 modules** (Artisan & Étude de prix), avec authentification locale chiffrée et échange de devis entre profils via fichiers `.ndev`.
+> Logiciel desktop de chiffrage d'opérations BTP et études de prix, pour artisans et bureaux d'études.
 
-> Phase actuelle : **0 — Squelette**
-> Auteur : Nathan RAMEDACE
+## Fonctionnalités
 
----
+### 📐 Profil Étude de prix
+- Base de prix multi-lots (matériaux, matériel, main-d'œuvre)
+- Compositions détaillées avec marges
+- Génération de devis multi-versions avec coefficient KPV
+- Indexation BT01 / ILC
+- Export PDF + import/export Excel
+- Carnet d'adresses artisans + envoi de devis chiffrés
 
-## Prérequis
+### 🔨 Profil Artisan
+- Paramètres KPV (4 modes : % du PV, BTP cascade, additif, multiplicatif)
+- Calcul automatique du KPV depuis vos frais réels (loyer, charges, etc.)
+- Gestion du matériel amorti (calcul du coût horaire)
+- Carnet de fournisseurs avec historique de prix
+- Suivi de chantier (vue Kanban + liste)
+- Calcul des coûts de déplacement par chantier (distance, conso, carburant)
+- Réception et consultation de devis chiffrés (.ndev)
 
-- **Node.js 18+** (recommandé : 20 LTS — fonctionne aussi avec Node 22 et 24)
-- **Windows 10/11** (cible principale ; macOS/Linux supportés en dev)
-- **Architecture x64 ou ARM64** : aucune compilation native requise grâce à `sql.js` (WebAssembly)
+### 📒 Comptabilité (BTP française)
+- Configuration entreprise (auto, EI, EURL, SARL, SAS)
+- Saisie recettes / dépenses avec plan comptable BTP
+- Situations chantier à l'avancement (gestion BTP sur 2 années fiscales)
+- Tableau de bord (CA, charges, marge, TVA)
+- Déclarations TVA prêtes à reporter (CA3 / CA12)
+- Marge brute par chantier
 
-> 💡 Pas besoin de Python, Visual Studio Build Tools, ou node-gyp. Tout est en JavaScript/WASM pur.
+### 🔐 Sécurité
+- Authentification par mot de passe + phrase de récupération BIP-39
+- 2FA TOTP (Google Authenticator, Authy, Bitwarden, 1Password…)
+- Licences modulaires .nelic (signatures Ed25519)
+- Chiffrement bout-en-bout des devis échangés (.ndev — ECIES X25519 + AES-256-GCM)
+- 100 % offline, données stockées localement et chiffrées (AES-256-GCM)
 
----
+## Plateformes supportées
 
-## Installation
+- **Windows** 10 / 11 (x64, ARM64)
+- **macOS** 11+ (Big Sur et plus récent, Apple Silicon ou Intel)
+- **Linux** (Ubuntu, Debian, Fedora — AppImage ou .deb)
 
+## Installation utilisateur
+
+### Windows
+Télécharger le fichier `.exe` depuis la page [Releases](https://github.com/DustProgram/calculation-tool/releases) et lancer l'installeur.
+
+### macOS
+Télécharger le fichier `.dmg` correspondant à votre puce :
+- **Apple Silicon** (M1, M2, M3, M4) : `Nucléar Estim-x.x.x-arm64.dmg`
+- **Intel** : `Nucléar Estim-x.x.x.dmg`
+
+Ouvrir le `.dmg` puis glisser l'app dans le dossier Applications.
+
+> ⚠️ **Note Gatekeeper macOS** : l'application n'étant pas signée Apple Developer pour le moment, lors du premier lancement macOS affichera un message de sécurité. Solution : clic-droit sur l'icône de l'app dans Applications → **Ouvrir** → confirmer. Une fois validée, l'app se lancera normalement.
+
+### Linux
+- AppImage : rendre exécutable (`chmod +x Nucléar*.AppImage`) et lancer
+- Debian/Ubuntu : `sudo dpkg -i Nucléar*.deb`
+
+## Développement
+
+### Prérequis
+- Node.js 18+ (LTS recommandé)
+- Git
+
+### Installation
 ```bash
-# Dans le dossier du projet
+git clone https://github.com/DustProgram/calculation-tool.git
+cd calculation-tool
 npm install
-```
-
-L'installation prend ~30 secondes (que des packages JavaScript, aucune compilation).
-
----
-
-## Lancement en développement
-
-```bash
 npm start
 ```
 
-L'application s'ouvre. Au premier lancement, l'écran propose la création d'un compte.
+### Build
 
----
-
-## Build d'un installeur Windows
+#### Tout en une commande
 
 ```bash
-npm run build:win
+npm run build:all
 ```
 
-L'installeur `.exe` est généré dans `dist/`.
+Ce script s'adapte automatiquement à ton OS :
+- **Sur macOS** → compile Windows + macOS + Linux ✅
+- **Sur Windows ou Linux** → compile Windows + Linux uniquement (Apple interdit le build macOS depuis un autre OS)
 
----
+#### Build par plateforme
 
-## Publication d'une release et auto-update
-
-L'application utilise **electron-updater** + **GitHub Releases** pour les mises à jour automatiques.
-
-**Repo de mise à jour :** `https://github.com/DustProgram/calculation-tool`
-
-### Procédure de release
-
-1. **Bump de la version** dans `package.json` (ex: `0.1.0` → `0.2.0`).
-
-2. **Token GitHub** : génère un Personal Access Token avec le scope `repo` sur https://github.com/settings/tokens, puis :
-   ```powershell
-   # Windows PowerShell
-   $env:GH_TOKEN = "ghp_xxxxxxxxxxxxxxxxxxxxx"
-   ```
-   ```bash
-   # Linux/Mac
-   export GH_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxx
-   ```
-
-3. **Build + publish** :
-   ```bash
-   npm run publish
-   ```
-   electron-builder compile l'installeur et le publie en **draft release** sur le repo `DustProgram/calculation-tool`. Il génère aussi `latest.yml` (indispensable à l'auto-update).
-
-4. **Sur GitHub** : ouvre la draft release créée, vérifie que l'installeur `.exe` ET `latest.yml` sont bien attachés, puis **publie** la release (passe de "draft" à "published").
-
-5. **Côté utilisateur** : au prochain démarrage de l'app, electron-updater détecte la nouvelle version, télécharge l'installeur, et propose un redémarrage pour l'appliquer.
-
-### Comportement de l'auto-update
-
-- Vérification 5 secondes après le démarrage de l'app (mode `app.isPackaged` uniquement, pas en dev).
-- Téléchargement automatique en arrière-plan.
-- Une fois téléchargée, dialogue qui propose "Redémarrer maintenant" ou "Plus tard".
-- Si "Plus tard", la MAJ s'applique automatiquement à la prochaine fermeture de l'app (`autoInstallOnAppQuit`).
-
----
-
-## Structure du projet
-
-```
-nuclear-estim/
-├── package.json           # Métadonnées et dépendances
-├── main.js                # Process Electron principal (IPC, DB, crypto)
-├── preload.js             # Pont sécurisé renderer ↔ main
-├── src/
-│   ├── crypto.js          # Primitives crypto (scrypt, AES-GCM, X25519, BIP-39)
-│   ├── db.js              # SQLite (system DB + user DB par compte)
-│   └── ndev.js            # Format d'échange .ndev (stub Phase 0)
-└── ui/
-    ├── index.html         # Tous les écrans en sections cachées
-    ├── style.css          # Thème sombre
-    └── app.js             # Logique renderer (auth, navigation, pages)
+```bash
+npm run build:win          # Windows uniquement (x64 + ARM64)
+npm run build:mac          # macOS (Apple Silicon + Intel)
+npm run build:mac-arm      # macOS Apple Silicon uniquement
+npm run build:mac-intel    # macOS Intel uniquement
+npm run build:linux        # Linux (AppImage + .deb)
 ```
 
----
+#### Build automatique multi-plateforme via GitHub Actions
 
-## Modèle de sécurité
+Le projet inclut un workflow GitHub Actions (`.github/workflows/build.yml`) qui builde **les 3 plateformes en parallèle** sur des serveurs GitHub. Pour le déclencher :
 
-### Authentification
+```bash
+# Méthode 1 : pousser un tag de version
+git tag v0.1.0
+git push origin v0.1.0
 
-- Mot de passe utilisateur dérivé via **scrypt** (N=32768, r=8, p=1) avec un sel aléatoire de 32 octets.
-- Chaque utilisateur a une **clé de chiffrement de données (DEK)** aléatoire de 256 bits.
-- La DEK est stockée *deux fois*, chiffrée par AES-256-GCM :
-  - Une fois avec la clé dérivée du **mot de passe**
-  - Une fois avec la clé dérivée d'une **phrase de récupération BIP-39 de 12 mots**
-- → Connexion possible avec MDP ou avec phrase.
+# Méthode 2 : déclencher manuellement
+# → onglet Actions sur GitHub → workflow "Build & Release" → Run workflow
+```
 
-### Récupération
+Au bout de 5-10 minutes, GitHub crée une Release contenant les `.exe`, `.dmg` et `.AppImage` prêts à distribuer. C'est l'approche recommandée si tu n'as pas de Mac.
 
-Si le mot de passe est perdu :
-1. L'utilisateur saisit son login + sa phrase de 12 mots
-2. La phrase déchiffre la DEK
-3. La DEK est rechiffrée avec un nouveau MDP
+> **Pour distribution publique sur Mac sans Gatekeeper warning** : il faut signer + notariser avec un Apple Developer ID (99$/an). Une fois obtenu, dé-commenter les lignes `CSC_LINK`, `APPLE_ID`, etc. dans `.github/workflows/build.yml` et ajouter les secrets correspondants dans les paramètres GitHub du repo.
 
-⚠️ **Sans MDP ni phrase, les données sont définitivement irrécupérables.** Aucun backdoor, aucun tiers de confiance.
+## Architecture
 
-### Stockage
+- **Electron 32** + electron-updater
+- **sql.js** (SQLite WASM, sans dépendance native) — assure la compatibilité ARM/x64/macOS sans recompilation
+- **bip39** pour les phrases de récupération
+- **xlsx** (SheetJS) pour Excel
+- **qrcode** pour les QR (TOTP, identité)
+- Pas de framework UI : JS vanille pour la lisibilité
 
-- DB système (catalogue des comptes) : `%APPDATA%\Nucléar Estim\data\system.db`
-- DB par utilisateur : `%APPDATA%\Nucléar Estim\data\user-<id>.db`
-- Boîte de réception `.ndev` : `%APPDATA%\Nucléar Estim\inbox\`
+## Crédits
 
-### Échange de devis (Phase 3)
+Conçu et développé par **Nathan RAMEDACE**.
+© 2026 — Tous droits réservés.
 
-Format `.ndev` : devis chiffré avec une clé symétrique dérivée d'un échange ECDH **X25519** entre les clés publiques de l'expéditeur et du destinataire. Signature Ed25519 pour authenticité (à finaliser en Phase 3).
-
----
-
-## Roadmap
-
-| Phase | Contenu | Statut |
-|---|---|---|
-| 0 | Squelette : Electron + SQLite + auth + navigation 2 profils | ✅ Livré |
-| 1 | Module Étude : base de prix, compositions, devis avec versions, indexation | ⏳ À venir |
-| 2 | Module Artisan : KPV par lot, déplacements, fournisseurs, suivi chantier | ⏳ À venir |
-| 3 | Échange `.ndev` : génération, chiffrement X25519, dossier surveillé | ⏳ À venir |
-
----
-
-## Test rapide
-
-1. `npm install` puis `npm start`
-2. Créer un compte (ex: login = `nathan`, MDP = `testtest123`)
-3. **Noter la phrase de 12 mots affichée** (sinon perte de données possible)
-4. Cocher "j'ai mis la phrase en sécurité" → Continuer
-5. Choisir un profil (Artisan ou Étude)
-6. Naviguer dans le menu — les pages affichent le périmètre prévu pour chaque phase
-7. Tester la déconnexion / reconnexion
-8. Tester la récupération : depuis l'écran login, onglet "Mot de passe oublié", saisir la phrase de 12 mots et un nouveau MDP
+Code source disponible sur [GitHub — DustProgram/calculation-tool](https://github.com/DustProgram/calculation-tool).
