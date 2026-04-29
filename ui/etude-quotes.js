@@ -56,6 +56,7 @@
           <td class="center actions">
             <button class="btn-icon" data-action="open" title="Ouvrir">📂</button>
             <button class="btn-icon" data-action="pdf" title="Export PDF">📄</button>
+            <button class="btn-icon" data-action="send" title="Envoyer aux artisans (.ndev)">📤</button>
             <button class="btn-icon danger" data-action="delete" title="Supprimer">🗑</button>
           </td>
         </tr>
@@ -99,6 +100,10 @@
           const r = await window.api.etude.quotes.exportPdf({ quoteId: id, versionNumero: qData.last_version });
           if (r.ok) toast('PDF généré : ' + r.path, 'success');
           else if (!r.canceled) toast('Erreur PDF : ' + r.error, 'danger');
+        }
+        if (btn.dataset.action === 'send') {
+          const qData = quotes.find(x => x.id === id);
+          openSendModal(id, qData);
         }
         if (btn.dataset.action === 'delete') {
           const q = quotes.find(x => x.id === id);
@@ -148,27 +153,32 @@
 
           <h3>💰 Tarification (KPV & TVA)</h3>
           <div class="kpv-block">
-            <div class="form-row">
+            <div class="form-row" style="margin-bottom:6px">
               <label class="radio">
                 <input type="radio" name="kpv-mode" value="fin" ${settings.kpv_mode === 'fin' ? 'checked' : ''}>
-                <span>Marge en bas du devis (le client voit le détail Total HT + Frais)</span>
+                <span><strong>Marge à la fin du devis</strong> — le client voit le détail : Sous-total + Frais et marge + Total HT</span>
               </label>
             </div>
             <div class="form-row">
               <label class="radio">
                 <input type="radio" name="kpv-mode" value="integre" ${settings.kpv_mode === 'integre' ? 'checked' : ''}>
-                <span>Marge intégrée aux PU (le client ne voit qu'un PU final, pas de détail)</span>
+                <span><strong>Marge intégrée aux prix unitaires</strong> — le client ne voit qu'un PU final (déboursé masqué)</span>
               </label>
             </div>
-            <div class="form-grid" style="margin-top:8px">
-              <label>Coef. KPV (%)
-                <input id="q-kpv" type="number" step="0.1" value="${settings.kpv_pct}">
+
+            <div class="form-grid" style="margin-top:12px">
+              <label>KPV en %
+                <input id="q-kpv-pct" type="number" step="0.1" value="${formatNum(settings.kpv_pct, 2)}">
               </label>
-              <label>TVA (%)
+              <label>KPV en coefficient
+                <input id="q-kpv-coef" type="number" step="0.001" value="${formatNum(1 + settings.kpv_pct / 100, 4)}">
+              </label>
+              <label class="full">TVA (%)
                 <input id="q-tva" type="number" step="0.1" value="${settings.tva_pct}">
                 <small class="muted">DOM-TOM : 8.5% &nbsp;·&nbsp; Métropole : 20% &nbsp;·&nbsp; Travaux rénovation : 10% ou 5.5%</small>
               </label>
             </div>
+            <p class="kpv-note muted small" id="kpv-explainer"></p>
           </div>
 
           ${isEdit && quote.versions.length > 1 ? `
@@ -274,12 +284,40 @@
         renderLignes();
         renderTotaux();
 
-        // Inputs KPV/TVA → recalc en live
+        // Inputs KPV/TVA — sync coef <-> pct + explainer
+        function refreshKpvUi() {
+          const inputPct = body.querySelector('#q-kpv-pct');
+          const inputCoef = body.querySelector('#q-kpv-coef');
+          if (inputPct && document.activeElement !== inputPct) inputPct.value = formatNum(settings.kpv_pct, 2);
+          if (inputCoef && document.activeElement !== inputCoef) inputCoef.value = formatNum(1 + settings.kpv_pct / 100, 4);
+          const expl = body.querySelector('#kpv-explainer');
+          if (expl) {
+            const t = computeTotals(workingLignes, settings);
+            if (settings.kpv_mode === 'fin') {
+              expl.innerHTML = `→ Le client verra une ligne <em>"Frais et marge"</em> de <strong>${formatEUR(t.frais)}</strong> ajoutée au déboursé.`;
+            } else {
+              expl.innerHTML = `→ Chaque PU au client = PU déboursé × <strong>${formatNum(1 + settings.kpv_pct / 100, 4)}</strong>. Le déboursé est masqué dans le PDF.`;
+            }
+          }
+          renderTotaux();
+        }
         $$('input[name="kpv-mode"]', body).forEach(r => {
-          r.onchange = () => { settings.kpv_mode = r.value; renderTotaux(); };
+          r.onchange = () => { settings.kpv_mode = r.value; refreshKpvUi(); };
         });
-        body.querySelector('#q-kpv').oninput = (e) => { settings.kpv_pct = parseFloat(e.target.value) || 0; renderTotaux(); };
-        body.querySelector('#q-tva').oninput = (e) => { settings.tva_pct = parseFloat(e.target.value) || 0; renderTotaux(); };
+        body.querySelector('#q-kpv-pct').oninput = (e) => {
+          settings.kpv_pct = parseFloat(String(e.target.value).replace(',', '.')) || 0;
+          refreshKpvUi();
+        };
+        body.querySelector('#q-kpv-coef').oninput = (e) => {
+          const coef = parseFloat(String(e.target.value).replace(',', '.')) || 1;
+          settings.kpv_pct = (coef - 1) * 100;
+          refreshKpvUi();
+        };
+        body.querySelector('#q-tva').oninput = (e) => {
+          settings.tva_pct = parseFloat(String(e.target.value).replace(',', '.')) || 0;
+          renderTotaux();
+        };
+        refreshKpvUi();
 
         // Boutons d'ajout
         body.querySelector('#btn-add-libre').onclick = () => {
@@ -405,6 +443,100 @@
       footer: `<button class="btn primary" data-action="close">Fermer</button>`,
       onMount: ({ footer, close }) => {
         footer.querySelector('[data-action="close"]').onclick = () => close(true);
+      }
+    });
+  }
+
+  // -----------------------------------------------------------------------
+  // ENVOI .ndev — multi-destinataires
+  // -----------------------------------------------------------------------
+  async function openSendModal(quoteId, quoteData) {
+    const r = await window.api.contacts.list();
+    const all = r.ok ? r.data : [];
+    if (!all.length) {
+      return modal({
+        title: '📤 Envoyer aux artisans',
+        content: `
+          <div class="status-box warn">⚠️ Aucun artisan dans ton carnet.</div>
+          <p>Pour envoyer un devis chiffré, ajoute d'abord des artisans dans le menu <strong>👥 Carnet artisans</strong>. Tu auras besoin de leur clé publique X25519.</p>
+        `,
+        footer: '<button class="btn primary" data-action="ok">Compris</button>',
+        onMount: ({ footer, close }) => { footer.querySelector('[data-action="ok"]').onclick = () => close(true); }
+      });
+    }
+    return modal({
+      title: '📤 Envoyer le devis ' + (quoteData.code || '#' + quoteId),
+      large: true,
+      content: `
+        <p class="muted small">Sélectionne les artisans à qui envoyer le devis. Un fichier .nbsp.ndev sera généré pour chaque destinataire (chiffré spécifiquement pour lui).</p>
+
+        <label>Sujet
+          <input id="s-subject" value="${escapeHtml((quoteData.code || '') + ' — ' + (quoteData.titre || ''))}">
+        </label>
+
+        <h4 style="margin-top:14px">Destinataires (${all.length})</h4>
+        <div class="contacts-pick" style="max-height:300px;overflow:auto;border:1px solid var(--border);border-radius:6px">
+          ${all.map(c => `
+            <label class="contact-pick" style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid var(--border);cursor:pointer">
+              <input type="checkbox" class="c-pick" data-id="${c.id}" style="width:18px;height:18px;accent-color:var(--primary)">
+              <div style="flex:1">
+                <strong>${escapeHtml(c.label)}</strong>
+                ${c.metier ? '<br><span class="muted small">' + escapeHtml(c.metier) + '</span>' : ''}
+                ${c.email ? '<br><span class="muted small">' + escapeHtml(c.email) + '</span>' : ''}
+              </div>
+            </label>
+          `).join('')}
+        </div>
+        <div class="form-row" style="margin-top:8px">
+          <button class="btn ghost small" id="btn-pick-all">Tout sélectionner</button>
+          <button class="btn ghost small" id="btn-pick-none">Aucun</button>
+        </div>
+        <div id="send-result" style="margin-top:14px"></div>
+      `,
+      footer: `
+        <button class="btn ghost" data-action="cancel">Annuler</button>
+        <button class="btn primary" data-action="send">📤 Générer les fichiers .ndev</button>
+      `,
+      onMount: ({ body, footer, close }) => {
+        body.querySelector('#btn-pick-all').onclick = () => $$('.c-pick', body).forEach(c => c.checked = true);
+        body.querySelector('#btn-pick-none').onclick = () => $$('.c-pick', body).forEach(c => c.checked = false);
+        footer.querySelector('[data-action="cancel"]').onclick = () => close(null);
+        footer.querySelector('[data-action="send"]').onclick = async () => {
+          const ids = $$('.c-pick:checked', body).map(c => parseInt(c.dataset.id, 10));
+          if (!ids.length) return toast('Sélectionne au moins un artisan', 'danger');
+          const subj = body.querySelector('#s-subject').value.trim();
+          const r = await window.api.ndev.export({ quoteId, contactIds: ids, subject: subj });
+          if (!r.ok) return toast('Erreur : ' + r.error, 'danger');
+          // Affiche les fichiers générés avec boutons de téléchargement
+          const result = body.querySelector('#send-result');
+          result.innerHTML = `
+            <div class="status-box ok">✅ ${r.files.length} fichier(s) .ndev généré(s)</div>
+            <table class="data-table" style="margin-top:8px">
+              <thead><tr><th>Destinataire</th><th>Email</th><th class="center">Action</th></tr></thead>
+              <tbody>${r.files.map((f, i) => `
+                <tr>
+                  <td>${escapeHtml(f.contact_label)}</td>
+                  <td class="small">${escapeHtml(f.contact_email || '—')}</td>
+                  <td class="center">
+                    <button class="btn ghost small" data-dl="${i}">⬇ Télécharger</button>
+                  </td>
+                </tr>
+              `).join('')}</tbody>
+            </table>
+          `;
+          $$('[data-dl]', result).forEach(btn => {
+            btn.onclick = () => {
+              const f = r.files[parseInt(btn.dataset.dl, 10)];
+              const blob = new Blob([f.content], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url; a.download = f.file_name; a.click();
+              setTimeout(() => URL.revokeObjectURL(url), 100);
+              toast('Téléchargé : ' + f.file_name, 'success');
+            };
+          });
+          toast('Fichiers .ndev générés', 'success');
+        };
       }
     });
   }

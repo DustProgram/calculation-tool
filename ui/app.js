@@ -358,6 +358,8 @@ async function renderPage(pageId) {
   if (pageId === 'artisan-logistic'  && window.ArtisanLogisticPage)  return window.ArtisanLogisticPage.render(content);
   if (pageId === 'artisan-sites'     && window.ArtisanSitesPage)     return window.ArtisanSitesPage.render(content);
   if (pageId === 'artisan-compta'    && window.ArtisanComptaPage)    return window.ArtisanComptaPage.render(content);
+  if (pageId === 'artisan-quotes-in' && window.ArtisanReceivedPage)  return window.ArtisanReceivedPage.render(content);
+  if (pageId === 'contacts'          && window.ContactsPage)         return window.ContactsPage.render(content);
   if (pageId === 'account'           && window.AccountPage)          return window.AccountPage.render(content);
 
   const renderer = PAGES[pageId];

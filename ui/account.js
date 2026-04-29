@@ -9,23 +9,44 @@
   async function refresh() {
     if (!containerEl) return;
     containerEl.innerHTML = '<div class="loader">Chargement…</div>';
-    const [totpRes, licStatusRes, licListRes, edRes] = await Promise.all([
+    const [totpRes, licStatusRes, licListRes, edRes, idRes] = await Promise.all([
       window.api.security.totp.status(),
       window.api.security.license.status(),
       window.api.security.license.list(),
-      window.api.security.editor.status()
+      window.api.security.editor.status(),
+      window.api.security.identity.get()
     ]);
     const totp = totpRes.ok ? totpRes : { enabled: false, remainingRecovery: 0 };
     const licStatus = licStatusRes.ok ? licStatusRes : { hasEtude: false, hasCompta: false, modules: [] };
     const licenses = licListRes.ok ? licListRes.data : [];
     const editorActive = !!(edRes.ok && edRes.active);
-    render({ totp, licStatus, licenses, editorActive });
+    const myId = idRes.ok ? idRes : null;
+    render({ totp, licStatus, licenses, editorActive, myId });
   }
 
-  function render({ totp, licStatus, licenses, editorActive }) {
+  function render({ totp, licStatus, licenses, editorActive, myId }) {
     containerEl.innerHTML = `
       <div class="page-header">
         <h1>🔐 Compte & Sécurité</h1>
+      </div>
+
+      <div class="card-block">
+        <h3>👤 Mon identité (échange de devis chiffrés)</h3>
+        <p class="muted small">Ta clé publique permet à un Bureau d'Études de t'envoyer des devis chiffrés .ndev. Donne-la à tes partenaires (par email, QR code, ou copier-coller).</p>
+        ${myId ? `
+          <label>Libellé affiché aux destinataires
+            <input id="id-label" value="${escapeHtml(myId.label || '')}" placeholder="ex: Roland — PROMORAME">
+          </label>
+          <label class="full" style="margin-top:10px">Ta clé publique (à partager)
+            <textarea id="id-pub" readonly rows="3" style="font-family:monospace;font-size:11px;background:var(--bg-2)">${escapeHtml(myId.pub_shareable)}</textarea>
+          </label>
+          <div class="form-row" style="margin-top:10px;flex-wrap:wrap">
+            <button class="btn ghost" id="btn-id-copy">📋 Copier</button>
+            <button class="btn ghost" id="btn-id-qr">📱 Voir en QR Code</button>
+            <button class="btn ghost" id="btn-id-save" style="margin-left:auto">💾 Enregistrer libellé</button>
+            <button class="btn danger" id="btn-id-regen">🔄 Régénérer (rompt les anciens partages)</button>
+          </div>
+        ` : '<p class="muted">Identité non disponible</p>'}
       </div>
 
       <div class="card-block">
@@ -108,6 +129,49 @@
     if (btnDisable) btnDisable.onclick = openTotpDisableModal;
     const btnRegen = $('#btn-regen-recov');
     if (btnRegen) btnRegen.onclick = openRegenRecoveryModal;
+
+    // BIND : Identité
+    const btnIdCopy = $('#btn-id-copy');
+    if (btnIdCopy && myId) {
+      btnIdCopy.onclick = () => navigator.clipboard.writeText(myId.pub_shareable).then(() => toast('Clé copiée', 'success'));
+    }
+    const btnIdQr = $('#btn-id-qr');
+    if (btnIdQr && myId) {
+      btnIdQr.onclick = async () => {
+        const r = await window.api.security.identity.qrcode({ text: myId.pub_shareable });
+        if (!r.ok) return toast(r.error, 'danger');
+        modal({
+          title: '📱 Mon identité en QR Code',
+          content: `
+            <p class="muted small">Le destinataire peut scanner ce QR avec son téléphone, ou utiliser l'image directement.</p>
+            <div style="text-align:center"><img src="${r.dataUrl}" alt="QR" style="width:280px;background:white;padding:8px;border-radius:8px"></div>
+            <p class="small" style="text-align:center;margin-top:10px"><strong>${escapeHtml(myId.label || '—')}</strong></p>
+          `,
+          footer: '<button class="btn primary" data-action="close">Fermer</button>',
+          onMount: ({ footer, close }) => { footer.querySelector('[data-action="close"]').onclick = () => close(true); }
+        });
+      };
+    }
+    const btnIdSave = $('#btn-id-save');
+    if (btnIdSave) {
+      btnIdSave.onclick = async () => {
+        const lbl = $('#id-label').value.trim();
+        const r = await window.api.security.identity.setLabel({ label: lbl });
+        if (r.ok) { toast('Libellé enregistré', 'success'); refresh(); }
+        else toast(r.error, 'danger');
+      };
+    }
+    const btnIdRegen = $('#btn-id-regen');
+    if (btnIdRegen) {
+      btnIdRegen.onclick = async () => {
+        if (!await confirmModal('Régénérer ta clé d\'identité ?',
+          'Tous les BE qui ont ton ancienne clé publique ne pourront plus t\'envoyer de devis. Tu devras leur communiquer ta nouvelle clé.')) return;
+        const lbl = $('#id-label').value.trim();
+        const r = await window.api.security.identity.regenerate({ label: lbl });
+        if (r.ok) { toast('Identité régénérée', 'success'); refresh(); }
+        else toast(r.error, 'danger');
+      };
+    }
 
     // BIND : Licences
     $('#btn-import-lic').onclick = openLicenseImportModal;
