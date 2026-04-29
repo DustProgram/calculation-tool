@@ -1,8 +1,7 @@
 // app.js — Logique du renderer (UI)
 // Pas de framework, tout en JS vanille avec un mini routeur d'écrans.
-
-const $ = (sel, root = document) => root.querySelector(sel);
-const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+// Note : $, $$, escapeHtml et autres utils sont définis par ui/lib.js
+// (chargé AVANT app.js dans index.html).
 
 let currentUser = null;
 let currentProfil = null;
@@ -341,19 +340,6 @@ async function renderPage(pageId) {
       }
     } catch (_) {}
   }
-}
-
-// =========================================================================
-// UTILS
-// =========================================================================
-
-function escapeHtml(str) {
-  if (str == null) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }
 
 // =========================================================================
