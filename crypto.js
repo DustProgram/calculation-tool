@@ -46,16 +46,20 @@ function aesGcmDecrypt(payloadOrJson, key) {
   return Buffer.concat([decipher.update(ct), decipher.final()]);
 }
 
-// ---- BIP-39 (phrase de récupération 12 mots) -----------------------------
+// ---- BIP-39 (phrase de récupération 12 mots, en français) ----------------
+
+const FR_WORDLIST = bip39.wordlists.french;
 
 function generateMnemonic() {
-  // 128 bits d'entropie => 12 mots
-  return bip39.generateMnemonic(128);
+  // 128 bits d'entropie => 12 mots, wordlist française
+  return bip39.generateMnemonic(128, undefined, FR_WORDLIST);
 }
 
 function validateMnemonic(phrase) {
   if (typeof phrase !== 'string') return false;
-  return bip39.validateMnemonic(phrase.trim());
+  // Normalise : virgules ou espaces multiples → 1 espace
+  const normalized = phrase.trim().toLowerCase().replace(/[,\s]+/g, ' ');
+  return bip39.validateMnemonic(normalized, FR_WORDLIST);
 }
 
 // ---- X25519 (échange .ndev en Phase 3) -----------------------------------

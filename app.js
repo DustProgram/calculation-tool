@@ -93,16 +93,19 @@ async function doLogin() {
 async function doRecover() {
   const errEl = $('#recover-error');
   errEl.textContent = '';
+  // Normalise : virgules ou espaces multiples → 1 espace simple
+  const rawMnemonic = $('#recover-mnemonic').value.trim().toLowerCase().replace(/[,\s]+/g, ' ');
   const payload = {
     login: $('#recover-username').value.trim().toLowerCase(),
-    mnemonic: $('#recover-mnemonic').value.trim().toLowerCase().replace(/\s+/g, ' '),
+    mnemonic: rawMnemonic,
     newPassword: $('#recover-password').value
   };
   if (!payload.login) return errEl.textContent = 'Identifiant requis.';
-  if (payload.mnemonic.split(' ').length !== 12)
-    return errEl.textContent = 'La phrase doit contenir exactement 12 mots.';
+  const wordCount = payload.mnemonic ? payload.mnemonic.split(' ').length : 0;
+  if (wordCount !== 12)
+    return errEl.textContent = `La phrase doit contenir exactement 12 mots (tu en as saisi ${wordCount}).`;
   if (!payload.newPassword || payload.newPassword.length < 8)
-    return errEl.textContent = 'Nouveau mot de passe trop court.';
+    return errEl.textContent = 'Nouveau mot de passe trop court (8 min).';
 
   const res = await window.api.auth.recover(payload);
   if (!res.ok) return errEl.textContent = res.error;
@@ -125,11 +128,12 @@ async function doRecover() {
 function showMnemonic(phrase, onContinue) {
   const grid = $('#mnemonic-grid');
   grid.innerHTML = '';
+  grid.classList.add('hidden'); // floutée par défaut
   const words = phrase.split(/\s+/);
   words.forEach((w, i) => {
     const div = document.createElement('div');
     div.className = 'mnemonic-word';
-    div.innerHTML = `<span class="num">${i + 1}.</span><span>${w}</span>`;
+    div.innerHTML = `<span class="num">${i + 1}.</span><span class="word">${w}</span>`;
     grid.appendChild(div);
   });
 
@@ -139,6 +143,17 @@ function showMnemonic(phrase, onContinue) {
   $('#chk-mnemonic-saved').onchange = (e) => {
     $('#btn-mnemonic-continue').disabled = !e.target.checked;
   };
+
+  // Bouton "Maintenir pour afficher" — révèle la phrase tant qu'on appuie
+  const revealBtn = $('#btn-mnemonic-reveal');
+  const reveal = () => grid.classList.remove('hidden');
+  const hide = () => grid.classList.add('hidden');
+  revealBtn.onmousedown = reveal;
+  revealBtn.onmouseup = hide;
+  revealBtn.onmouseleave = hide;
+  revealBtn.ontouchstart = (e) => { e.preventDefault(); reveal(); };
+  revealBtn.ontouchend = hide;
+  revealBtn.ontouchcancel = hide;
 
   $('#btn-mnemonic-copy').onclick = () => {
     navigator.clipboard.writeText(phrase);

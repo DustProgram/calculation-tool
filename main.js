@@ -172,16 +172,24 @@ ipcMain.handle('auth:signup', async (_evt, payload) => {
     const encPrivKey = cryptoMod.aesGcmEncrypt(kp.privateKey, dek);
 
     // 5. Stocke le tout
-    const userId = dbMod.systemDb().createUser({
-      login,
-      displayName: displayName || login,
-      profilDefault: profilDefault || 'etude',
-      salt: salt.toString('base64'),
-      wrappedByPassword,
-      wrappedByMnemonic,
-      publicKey: kp.publicKey.toString('base64'),
-      encPrivKey
-    });
+    let userId;
+    try {
+      userId = dbMod.systemDb().createUser({
+        login,
+        displayName: displayName || login,
+        profilDefault: profilDefault || 'etude',
+        salt: salt.toString('base64'),
+        wrappedByPassword,
+        wrappedByMnemonic,
+        publicKey: kp.publicKey.toString('base64'),
+        encPrivKey
+      });
+    } catch (e) {
+      if (/UNIQUE.*login/i.test(e.message)) {
+        throw new Error(`Cet identifiant est déjà utilisé. Choisis-en un autre, ou utilise "Mot de passe oublié" si c'est ton compte.`);
+      }
+      throw e;
+    }
 
     return {
       ok: true,
@@ -202,7 +210,7 @@ ipcMain.handle('auth:login', async (_evt, { login, password }) => {
     const masterKey = cryptoMod.deriveKey(password, salt);
     let dek;
     try {
-      dek = cryptoMod.aesGcmDecrypt(JSON.parse(user.wrappedByPassword), masterKey);
+      dek = cryptoMod.aesGcmDecrypt(JSON.parse(user.wrapped_by_password), masterKey);
     } catch (_) {
       throw new Error('Identifiants invalides.');
     }
@@ -219,12 +227,14 @@ ipcMain.handle('auth:recover', async (_evt, { login, mnemonic, newPassword }) =>
   try {
     const user = dbMod.systemDb().getUserByLogin(login);
     if (!user) throw new Error('Identifiant inconnu.');
-    if (!cryptoMod.validateMnemonic(mnemonic)) throw new Error('Phrase de récupération invalide.');
+    // Normalise la phrase (virgules ou espaces → 1 espace)
+    const normalizedMnemonic = String(mnemonic || '').trim().toLowerCase().replace(/[,\s]+/g, ' ');
+    if (!cryptoMod.validateMnemonic(normalizedMnemonic)) throw new Error('Phrase de récupération invalide (vérifie l\'orthographe et l\'ordre des 12 mots).');
     const salt = Buffer.from(user.salt, 'base64');
-    const recoveryKey = cryptoMod.deriveKey(mnemonic.trim(), salt);
+    const recoveryKey = cryptoMod.deriveKey(normalizedMnemonic, salt);
     let dek;
     try {
-      dek = cryptoMod.aesGcmDecrypt(JSON.parse(user.wrappedByMnemonic), recoveryKey);
+      dek = cryptoMod.aesGcmDecrypt(JSON.parse(user.wrapped_by_mnemonic), recoveryKey);
     } catch (_) {
       throw new Error('Phrase de récupération incorrecte.');
     }

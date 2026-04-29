@@ -261,6 +261,28 @@ input, textarea, select {
   min-width: 18px;
 }
 
+/* Mode "caché" (par défaut) : les mots sont floutés et non sélectionnables */
+.mnemonic-grid.hidden .mnemonic-word .word {
+  filter: blur(7px);
+  user-select: none;
+  pointer-events: none;
+}
+.mnemonic-grid:not(.hidden) .mnemonic-word .word {
+  filter: none;
+  user-select: text;
+  transition: filter 0.15s;
+}
+
+.reveal-btn {
+  user-select: none;
+  -webkit-user-select: none;
+}
+.reveal-btn:active {
+  background: var(--primary) !important;
+  color: white;
+  border-color: var(--primary);
+}
+
 .actions {
   display: flex;
   gap: 8px;

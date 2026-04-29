@@ -67,8 +67,8 @@
       <label>Identifiant
         <input type="text" id="recover-username" placeholder="ex: nathan">
       </label>
-      <label>Phrase de récupération <span class="muted">(12 mots séparés par des espaces)</span>
-        <textarea id="recover-mnemonic" rows="3" placeholder="abandon ability able about above absent absorb abstract absurd abuse access accident"></textarea>
+      <label>Phrase de récupération <span class="muted">(12 mots, séparés par des espaces ou des virgules)</span>
+        <textarea id="recover-mnemonic" rows="3" placeholder="ex: abaisser, abandon, abdiquer, abeille, abolir, aborder, aboutir, aboyer, abrasif, abreuver, abriter, abroger"></textarea>
       </label>
       <label>Nouveau mot de passe
         <input type="password" id="recover-password" placeholder="••••••••">
@@ -98,9 +98,10 @@
       <li>Ne l'envoie à personne, jamais.</li>
       <li>Anthropic, Microsoft, Google ou n'importe qui d'autre ne peut PAS te la redonner.</li>
     </ul>
-    <div class="mnemonic-grid" id="mnemonic-grid"></div>
+    <div class="mnemonic-grid hidden" id="mnemonic-grid"></div>
 
     <div class="actions">
+      <button class="btn ghost reveal-btn" id="btn-mnemonic-reveal">👁 Maintenir pour afficher</button>
       <button class="btn ghost" id="btn-mnemonic-copy">📋 Copier</button>
       <button class="btn ghost" id="btn-mnemonic-print">🖨 Imprimer</button>
     </div>
