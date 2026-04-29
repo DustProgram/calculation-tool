@@ -392,6 +392,57 @@ const SCHEMA_USER = `
   CREATE INDEX IF NOT EXISTS idx_prices_repere ON prices(repere);
   CREATE INDEX IF NOT EXISTS idx_quotes_statut ON quotes(statut);
   CREATE INDEX IF NOT EXISTS idx_equipment_nom ON equipment(nom);
+
+  -- ============================================================
+  -- COMPTABILITÉ (Phase 2.2) — Profil Artisan
+  -- ============================================================
+
+  -- Écritures comptables (recettes et dépenses)
+  CREATE TABLE IF NOT EXISTS compta_ecritures (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT NOT NULL,                  -- 'recette' ou 'depense'
+    date INTEGER NOT NULL,               -- date d'opération (timestamp)
+    libelle TEXT NOT NULL,
+    compte_code TEXT,                    -- ex: '701', '604', '606'
+    compte_label TEXT,                   -- libellé du compte (cache pour affichage)
+    montant_ht REAL NOT NULL DEFAULT 0,
+    tva_pct REAL NOT NULL DEFAULT 0,
+    montant_tva REAL NOT NULL DEFAULT 0,
+    montant_ttc REAL NOT NULL DEFAULT 0,
+    site_id INTEGER,                     -- chantier rattaché (optionnel)
+    quote_id INTEGER,                    -- devis rattaché (optionnel)
+    supplier_id INTEGER,                 -- fournisseur rattaché (optionnel)
+    client_nom TEXT,                     -- pour les recettes sans devis
+    ref_facture TEXT,                    -- numéro de facture
+    date_paiement INTEGER,               -- date d'encaissement/décaissement effectif
+    mode_paiement TEXT,                  -- 'cheque', 'virement', 'cb', 'especes', 'prelevement'
+    notes TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE SET NULL,
+    FOREIGN KEY (quote_id) REFERENCES quotes(id) ON DELETE SET NULL,
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL
+  );
+
+  -- Situations (factures intermédiaires de chantier, méthode à l'avancement)
+  CREATE TABLE IF NOT EXISTS compta_situations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    site_id INTEGER NOT NULL,
+    numero TEXT,                          -- ex: 'SIT-001', 'SIT-002'
+    date INTEGER NOT NULL,
+    pct_avancement_cumule REAL NOT NULL,  -- ex: 30, 60, 100
+    montant_ht_periode REAL NOT NULL,     -- montant facturé sur cette période
+    tva_pct REAL NOT NULL DEFAULT 8.5,
+    montant_ttc_periode REAL NOT NULL,
+    date_paiement INTEGER,                -- quand le client a payé
+    notes TEXT,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_compta_ec_date ON compta_ecritures(date);
+  CREATE INDEX IF NOT EXISTS idx_compta_ec_site ON compta_ecritures(site_id);
+  CREATE INDEX IF NOT EXISTS idx_compta_sit_site ON compta_situations(site_id);
 `;
 
 module.exports = {
