@@ -1,9 +1,12 @@
 {
   "name": "nuclear-estim",
   "version": "0.1.0",
-  "description": "Nucléar Estim — Chiffrage d'opérations et études de prix pour artisans et bureaux d'études.",
+  "description": "Nuclear Estim — Chiffrage d'opérations et études de prix pour artisans et bureaux d'études.",
   "main": "main.js",
-  "author": "Nathan RAMEDACE",
+  "author": {
+    "name": "Nathan RAMEDACE",
+    "email": "contact@nuclear-estim.app"
+  },
   "license": "UNLICENSED",
   "private": true,
   "repository": {
@@ -36,8 +39,9 @@
   },
   "build": {
     "appId": "com.nuclear.estim",
-    "productName": "Nucléar Estim",
-    "copyright": "© 2026 Nathan RAMEDACE",
+    "productName": "Nuclear Estim",
+    "copyright": "Copyright (c) 2026 Nathan RAMEDACE",
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
     "files": [
       "main.js",
       "preload.js",
@@ -72,18 +76,19 @@
       ],
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
+      "identity": null,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "extendInfo": {
-        "NSDesktopFolderUsageDescription": "Nucléar Estim peut accéder au Bureau pour exporter des fichiers .ndev, .nelic, PDF ou Excel.",
-        "NSDocumentsFolderUsageDescription": "Nucléar Estim peut accéder à Documents pour ouvrir et enregistrer vos devis et exports.",
-        "NSDownloadsFolderUsageDescription": "Nucléar Estim peut accéder aux Téléchargements pour ouvrir les fichiers .ndev et .nelic reçus."
+        "NSDesktopFolderUsageDescription": "Nuclear Estim peut accéder au Bureau pour exporter des fichiers .ndev, .nelic, PDF ou Excel.",
+        "NSDocumentsFolderUsageDescription": "Nuclear Estim peut accéder à Documents pour ouvrir et enregistrer vos devis et exports.",
+        "NSDownloadsFolderUsageDescription": "Nuclear Estim peut accéder aux Téléchargements pour ouvrir les fichiers .ndev et .nelic reçus."
       }
     },
     "dmg": {
-      "title": "Nucléar Estim ${version}",
-      "icon": "build/icon.icns",
+      "title": "Nuclear Estim ${version}",
       "background": null,
+      "writeUpdateInfo": false,
       "contents": [
         { "x": 130, "y": 220 },
         { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
@@ -95,18 +100,24 @@
         { "target": "AppImage", "arch": ["x64", "arm64"] },
         { "target": "deb", "arch": ["x64", "arm64"] }
       ],
-      "category": "Office"
+      "category": "Office",
+      "maintainer": "Nathan RAMEDACE <contact@nuclear-estim.app>",
+      "synopsis": "Logiciel de chiffrage BTP et études de prix",
+      "description": "Nuclear Estim est un logiciel desktop de chiffrage d'opérations BTP et études de prix, pour artisans et bureaux d'études."
+    },
+    "deb": {
+      "depends": ["libgtk-3-0", "libnotify4", "libnss3", "libxss1", "libxtst6", "xdg-utils", "libatspi2.0-0", "libuuid1", "libsecret-1-0"]
     },
     "fileAssociations": [
       {
         "ext": "ndev",
-        "name": "Devis Nucléar Estim chiffré",
+        "name": "Devis Nuclear Estim chiffre",
         "description": "Devis chiffré échangé entre BE et Artisans",
         "role": "Editor"
       },
       {
         "ext": "nelic",
-        "name": "Licence Nucléar Estim",
+        "name": "Licence Nuclear Estim",
         "description": "Fichier de licence pour débloquer les modules",
         "role": "Viewer"
       }
