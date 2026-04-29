@@ -122,6 +122,33 @@ contextBridge.exposeInMainWorld('api', {
     chantiersEnCours: (q) => ipcRenderer.invoke('compta:chantiersEnCours', q),
     margeChantiers: (q) => ipcRenderer.invoke('compta:margeChantiers', q)
   },
+  // Phase 3 : Sécurité
+  security: {
+    totp: {
+      status: () => ipcRenderer.invoke('totp:status'),
+      setupBegin: () => ipcRenderer.invoke('totp:setupBegin'),
+      setupConfirm: (p) => ipcRenderer.invoke('totp:setupConfirm', p),
+      verify: (p) => ipcRenderer.invoke('totp:verify', p),
+      disable: (p) => ipcRenderer.invoke('totp:disable', p),
+      regenRecovery: (p) => ipcRenderer.invoke('totp:regenRecovery', p)
+    },
+    license: {
+      status: () => ipcRenderer.invoke('license:status'),
+      list: () => ipcRenderer.invoke('license:list'),
+      import: (p) => ipcRenderer.invoke('license:import', p),
+      delete: (p) => ipcRenderer.invoke('license:delete', p),
+      hasAccess: (p) => ipcRenderer.invoke('license:hasAccess', p)
+    },
+    editor: {
+      status: () => ipcRenderer.invoke('editor:status'),
+      activate: (p) => ipcRenderer.invoke('editor:activate', p),
+      deactivate: () => ipcRenderer.invoke('editor:deactivate'),
+      generateLicense: (p) => ipcRenderer.invoke('editor:generateLicense', p)
+    },
+    session: {
+      flags: () => ipcRenderer.invoke('session:flags')
+    }
+  },
   // .ndev (stubs Phase 0)
   ndev: {
     exportStub: (payload) => ipcRenderer.invoke('ndev:exportStub', payload),

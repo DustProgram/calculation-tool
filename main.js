@@ -12,8 +12,19 @@ const ndev = require('./src/ndev');
 const etude = require('./src/etude');
 const artisan = require('./src/artisan');
 const compta = require('./src/compta');
+const license = require('./src/license');
+const totp = require('./src/totp');
 const excelMod = require('./src/excel');
 const pdfMod = require('./src/pdf');
+
+// Flags de session sécurité (reset à chaque relance ou logout)
+let sessionFlags = {
+  totpVerifiedAtLogin: false,
+  totpVerifiedForCompta: false
+};
+function resetSessionFlags() {
+  sessionFlags = { totpVerifiedAtLogin: false, totpVerifiedForCompta: false };
+}
 
 let mainWindow = null;
 let session = null; // { userId, profil, masterKey } après login
@@ -222,6 +233,7 @@ ipcMain.handle('auth:login', async (_evt, { login, password }) => {
     session = { userId: user.id, login: user.login, displayName: user.display_name, profil: user.profil_default, dek };
     // Initialise la DB utilisateur (chiffrée par DEK pour les colonnes sensibles)
     dbMod.openUserDb(user.id, dek);
+    resetSessionFlags();
     return { ok: true, user: { id: user.id, login: user.login, displayName: user.display_name, profilDefault: user.profil_default } };
   } catch (e) {
     return { ok: false, error: e.message };
@@ -257,6 +269,7 @@ ipcMain.handle('auth:recover', async (_evt, { login, mnemonic, newPassword }) =>
 ipcMain.handle('auth:logout', async () => {
   session = null;
   dbMod.closeUserDb();
+  resetSessionFlags();
   return { ok: true };
 });
 
@@ -668,6 +681,197 @@ ipcMain.handle('compta:chantiersEnCours', async (_e, { dateRef } = {}) => {
 ipcMain.handle('compta:margeChantiers', async (_e, q) => {
   try { return { ok: true, data: compta.computeMargeChantiers(requireSession(), q || {}) }; }
   catch (e) { return { ok: false, error: e.message }; }
+});
+
+// ------------------------------------------------------------------------
+// IPC : Phase 3 — Sécurité (TOTP, Licences, Mode éditeur)
+// ------------------------------------------------------------------------
+
+const QRCode = require('qrcode');
+
+// ----- TOTP -----
+
+ipcMain.handle('totp:status', async () => {
+  try {
+    const db = requireSession();
+    const r = db.prepare('SELECT totp_enabled, totp_recovery_hashes FROM user_secrets WHERE id = 1').get();
+    const enabled = !!(r && r.totp_enabled);
+    const remainingRecovery = enabled && r.totp_recovery_hashes
+      ? JSON.parse(r.totp_recovery_hashes).length : 0;
+    return { ok: true, enabled, remainingRecovery, sessionVerified: sessionFlags.totpVerifiedAtLogin, comptaVerified: sessionFlags.totpVerifiedForCompta };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+// Étape 1 : génère un nouveau secret TOTP (mais ne l'enregistre pas encore)
+ipcMain.handle('totp:setupBegin', async () => {
+  try {
+    if (!session) throw new Error('Non connecté');
+    const secret = totp.generateSecret();
+    const url = totp.getOtpAuthUrl(secret, session.login || 'user', 'Nuclear Estim');
+    const qrDataUrl = await QRCode.toDataURL(url, { errorCorrectionLevel: 'M', scale: 6, margin: 2 });
+    const secretB32 = totp.bufferToBase32(secret).replace(/=/g, '');
+    return { ok: true, secret: secret.toString('base64'), secretBase32: secretB32, otpauthUrl: url, qrDataUrl };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+// Étape 2 : confirme avec un code, génère les codes de récupération, enregistre
+ipcMain.handle('totp:setupConfirm', async (_e, { secretB64, code }) => {
+  try {
+    const db = requireSession();
+    const secret = Buffer.from(secretB64, 'base64');
+    if (!totp.verifyTOTP(secret, code)) {
+      return { ok: false, error: 'Code incorrect — vérifie l\'heure du téléphone et réessaie.' };
+    }
+    const recovs = totp.generateRecoveryCodes(8);
+    const hashes = recovs.map(c => totp.hashRecoveryCode(c));
+    // Stocke le secret CHIFFRÉ par la DEK (aesGcmEncrypt retourne déjà un JSON string)
+    const ciphertextJson = cryptoMod.aesGcmEncrypt(secret, session.dek);
+    db.prepare(`UPDATE user_secrets SET totp_secret = ?, totp_enabled = 1, totp_recovery_hashes = ? WHERE id = 1`)
+      .run(Buffer.from(ciphertextJson, 'utf8'), JSON.stringify(hashes));
+    sessionFlags.totpVerifiedAtLogin = true;
+    sessionFlags.totpVerifiedForCompta = true;
+    return { ok: true, recoveryCodes: recovs };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+// Vérifie un code TOTP courant (pour challenge login ou compta)
+ipcMain.handle('totp:verify', async (_e, { code, context }) => {
+  try {
+    const db = requireSession();
+    const r = db.prepare('SELECT totp_secret, totp_enabled, totp_recovery_hashes FROM user_secrets WHERE id = 1').get();
+    if (!r || !r.totp_enabled) return { ok: false, error: 'TOTP non activé' };
+    const blob = Buffer.isBuffer(r.totp_secret) ? r.totp_secret : Buffer.from(r.totp_secret);
+    const ciphertextJson = blob.toString('utf8');
+    const secret = cryptoMod.aesGcmDecrypt(ciphertextJson, session.dek);
+    let valid = totp.verifyTOTP(secret, code);
+    let usedRecovery = false;
+    // Si pas valide, on tente comme code de récupération
+    if (!valid && r.totp_recovery_hashes) {
+      const hashes = JSON.parse(r.totp_recovery_hashes);
+      const v = totp.verifyRecoveryCode(code, hashes);
+      if (v.ok) {
+        valid = true; usedRecovery = true;
+        db.prepare('UPDATE user_secrets SET totp_recovery_hashes = ? WHERE id = 1').run(JSON.stringify(v.hashes));
+      }
+    }
+    if (!valid) return { ok: false, error: 'Code incorrect' };
+    // Marque la session
+    if (context === 'login') sessionFlags.totpVerifiedAtLogin = true;
+    if (context === 'compta') sessionFlags.totpVerifiedForCompta = true;
+    return { ok: true, usedRecovery };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+// Désactive le TOTP (demande mot de passe pour confirmer)
+ipcMain.handle('totp:disable', async (_e, { password }) => {
+  try {
+    if (!session) throw new Error('Non connecté');
+    // Vérification du mot de passe
+    const u = dbMod.systemDb().getUserByLogin(session.login);
+    if (!u) throw new Error('Utilisateur introuvable');
+    const salt = Buffer.from(u.salt, 'base64');
+    try {
+      const k = cryptoMod.deriveKey(password, salt);
+      cryptoMod.aesGcmDecrypt(JSON.parse(u.wrapped_by_password), k);
+    } catch (_) { return { ok: false, error: 'Mot de passe incorrect' }; }
+    const db = dbMod.userDb();
+    db.prepare(`UPDATE user_secrets SET totp_secret = NULL, totp_enabled = 0, totp_recovery_hashes = NULL WHERE id = 1`).run();
+    sessionFlags.totpVerifiedAtLogin = false;
+    sessionFlags.totpVerifiedForCompta = false;
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+// Régénère les codes de récupération (en cas de besoin, demande mdp)
+ipcMain.handle('totp:regenRecovery', async (_e, { password }) => {
+  try {
+    const db = requireSession();
+    const u = dbMod.systemDb().getUserByLogin(session.login);
+    const salt = Buffer.from(u.salt, 'base64');
+    try {
+      const k = cryptoMod.deriveKey(password, salt);
+      cryptoMod.aesGcmDecrypt(JSON.parse(u.wrapped_by_password), k);
+    } catch (_) { return { ok: false, error: 'Mot de passe incorrect' }; }
+    const recovs = totp.generateRecoveryCodes(8);
+    const hashes = recovs.map(c => totp.hashRecoveryCode(c));
+    db.prepare('UPDATE user_secrets SET totp_recovery_hashes = ? WHERE id = 1').run(JSON.stringify(hashes));
+    return { ok: true, recoveryCodes: recovs };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+// ----- LICENCES -----
+
+ipcMain.handle('license:status', async () => {
+  try {
+    const db = requireSession();
+    const active = license.getActiveModules(db);
+    const isEditor = license.isEditorActive(db);
+    return { ok: true, modules: active, hasEtude: active.includes('etude'), hasCompta: active.includes('compta'), isEditor };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('license:list', async () => {
+  try { return { ok: true, data: license.listUserLicenses(requireSession()) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('license:import', async (_e, { content }) => {
+  try {
+    const db = requireSession();
+    let lic;
+    try { lic = JSON.parse(content); }
+    catch (_) { return { ok: false, error: 'Le fichier .nelic n\'est pas un JSON valide' }; }
+    const v = license.verifyLicense(lic);
+    if (!v.ok) return v;
+    license.addUserLicense(db, lic);
+    return { ok: true, license: lic };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('license:delete', async (_e, { id }) => {
+  try { license.deleteUserLicense(requireSession(), id); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('license:hasAccess', async (_e, { module }) => {
+  try { return { ok: true, hasAccess: license.hasModuleAccess(requireSession(), module) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+// ----- MODE ÉDITEUR -----
+
+ipcMain.handle('editor:status', async () => {
+  try { return { ok: true, active: license.isEditorActive(requireSession()) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('editor:activate', async (_e, { privateKeyB64 }) => {
+  try {
+    if (!session) throw new Error('Non connecté');
+    const db = requireSession();
+    license.activateEditorMode(db, session.dek, privateKeyB64);
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('editor:deactivate', async () => {
+  try { license.deactivateEditorMode(requireSession()); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('editor:generateLicense', async (_e, params) => {
+  try {
+    if (!session) throw new Error('Non connecté');
+    const db = requireSession();
+    const lic = license.generateLicense(db, session.dek, params);
+    return { ok: true, license: lic };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+// ----- SESSION FLAGS -----
+
+ipcMain.handle('session:flags', async () => {
+  return { ok: true, flags: sessionFlags };
 });
 
 // ------------------------------------------------------------------------

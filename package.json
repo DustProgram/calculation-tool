@@ -20,7 +20,8 @@
     "sql.js": "^1.11.0",
     "bip39": "^3.1.0",
     "electron-updater": "^6.3.9",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "electron": "^32.0.0",
