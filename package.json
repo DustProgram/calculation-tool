@@ -17,7 +17,7 @@
     "publish": "electron-builder --win --publish always"
   },
   "dependencies": {
-    "better-sqlite3": "^11.3.0",
+    "sql.js": "^1.11.0",
     "bip39": "^3.1.0",
     "electron-updater": "^6.3.9"
   },

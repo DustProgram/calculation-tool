@@ -298,7 +298,16 @@ ipcMain.handle('app:version', async () => app.getVersion());
 // Cycle de vie
 // ------------------------------------------------------------------------
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Initialise le runtime sql.js (WASM, async, une seule fois)
+  try {
+    await dbMod.initRuntime();
+  } catch (e) {
+    dialog.showErrorBox('Erreur fatale', 'Impossible de charger le moteur de base de données :\n' + e.message);
+    app.quit();
+    return;
+  }
+
   // Initialise la DB système (catalogue des utilisateurs)
   dbMod.initSystemDb(getAppDir());
   // Crée le dossier inbox

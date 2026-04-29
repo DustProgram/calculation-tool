@@ -10,15 +10,11 @@ Architecture **1 application / 2 modules** (Artisan & Étude de prix), avec auth
 
 ## Prérequis
 
-- **Node.js 18+** (recommandé : 20 LTS)
+- **Node.js 18+** (recommandé : 20 LTS — fonctionne aussi avec Node 22 et 24)
 - **Windows 10/11** (cible principale ; macOS/Linux supportés en dev)
-- **Visual C++ Build Tools** (Windows uniquement, pour compiler `better-sqlite3`)
+- **Architecture x64 ou ARM64** : aucune compilation native requise grâce à `sql.js` (WebAssembly)
 
-Si tu n'as pas les Build Tools sur Windows :
-```powershell
-npm install --global --production windows-build-tools
-```
-ou installer "Build Tools for Visual Studio" depuis le site Microsoft.
+> 💡 Pas besoin de Python, Visual Studio Build Tools, ou node-gyp. Tout est en JavaScript/WASM pur.
 
 ---
 
@@ -29,7 +25,7 @@ ou installer "Build Tools for Visual Studio" depuis le site Microsoft.
 npm install
 ```
 
-L'installation compile `better-sqlite3` localement (~1-2 min sur Windows).
+L'installation prend ~30 secondes (que des packages JavaScript, aucune compilation).
 
 ---
 
