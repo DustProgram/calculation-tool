@@ -240,11 +240,24 @@ function goToApp() {
   $('#sidebar-profil-label').textContent =
     currentProfil === 'artisan' ? '👤 Profil Artisan' : '📐 Profil Étude';
 
-  // Branchement des items du menu
+  // Branchement des items du menu (du profil actif)
   const activeMenu = currentProfil === 'artisan' ? '#menu-artisan' : '#menu-etude';
   $$(activeMenu + ' .menu-item').forEach(btn => {
     btn.onclick = () => {
       $$(activeMenu + ' .menu-item').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderPage(btn.dataset.page);
+    };
+  });
+
+  // Branchement des items data-page de la sidebar bottom (commune aux 2 profils)
+  // ex: "Compte & sécurité"
+  $$('.sidebar-bottom .menu-item[data-page]').forEach(btn => {
+    btn.onclick = () => {
+      // Désactive l'éventuel élément actif dans le menu principal
+      $$(activeMenu + ' .menu-item').forEach(b => b.classList.remove('active'));
+      // Active visuellement ce bouton
+      $$('.sidebar-bottom .menu-item[data-page]').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       renderPage(btn.dataset.page);
     };
