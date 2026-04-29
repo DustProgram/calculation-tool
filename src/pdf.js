@@ -1,23 +1,22 @@
 // src/pdf.js — Génération PDF des devis via pdfmake (JS pur, pas de natif)
+//
+// IMPORTANT : pdfmake est require() de manière LAZY (à l'appel de generateQuotePdf
+// uniquement) pour ne pas planter le démarrage de l'app si pdfmake n'est
+// pas correctement installé. Si tu vois "Cannot find module 'call-bind-apply-helpers'"
+// ou similaire, lance : npm install --force, ou ajoute la dep manquante.
 
-const PdfPrinter = require('pdfmake');
 const fs = require('fs');
-const path = require('path');
 
-// Polices : pdfmake exige des chemins; on utilise les polices Roboto livrées par pdfmake
+let _PdfPrinter = null;
+function loadPdfMake() {
+  if (_PdfPrinter) return _PdfPrinter;
+  _PdfPrinter = require('pdfmake');
+  return _PdfPrinter;
+}
+
+// Polices : pdfmake exige des chemins TTF côté Node
 function getPrinter() {
-  // pdfmake livre des fonts dans node_modules/pdfmake/build/...
-  // mais elles ne sont pas accessibles directement comme TTF.
-  // On utilise des chemins vers les fonts standards Helvetica (intégrées au PDF).
-  // Astuce : pdfmake en mode Node a besoin de TTF. On utilise une astuce :
-  // le module "pdfmake" expose vfs via require('pdfmake/build/vfs_fonts.js') côté browser,
-  // mais côté Node il faut soit charger des TTF soit utiliser pdfmake/build/pdfmake.js.
-  //
-  // Solution : on télécharge nada, on utilise les fonts Roboto incluses dans pdfmake :
-  // node_modules/pdfmake/test/fonts/* contient des TTF, mais ce n'est pas garanti.
-  //
-  // Au final le plus simple : on essaie d'abord des chemins courants, sinon on fallback
-  // sur les fonts système Windows (Arial).
+  const PdfPrinter = loadPdfMake();
   const candidates = [
     {
       Roboto: {
@@ -33,8 +32,6 @@ function getPrinter() {
       return new PdfPrinter(fonts);
     } catch (_) {}
   }
-  // Fallback minimal : Helvetica embarqué dans PDF (pas besoin de TTF avec certaines configs)
-  // Si ça plante, on lèvera l'erreur côté handler IPC.
   throw new Error('Polices PDF introuvables. Réinstalle pdfmake (npm install pdfmake).');
 }
 
