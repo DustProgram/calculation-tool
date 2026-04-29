@@ -204,11 +204,22 @@ function openUserDb(userId, dek) {
   const migrations = [
     `ALTER TABLE composition_items ADD COLUMN categorie TEXT NOT NULL DEFAULT 'materiau'`,
     `ALTER TABLE composition_items ADD COLUMN taux_perte REAL NOT NULL DEFAULT 0`,
+    `ALTER TABLE composition_items ADD COLUMN equipment_id INTEGER`,
     `ALTER TABLE quotes ADD COLUMN client_adresse TEXT`,
     `ALTER TABLE quotes ADD COLUMN kpv_mode TEXT NOT NULL DEFAULT 'fin'`,
+    `ALTER TABLE quotes ADD COLUMN kpv_unit TEXT NOT NULL DEFAULT 'pct'`,
     `ALTER TABLE quotes ADD COLUMN kpv_pct REAL NOT NULL DEFAULT 0`,
     `ALTER TABLE quotes ADD COLUMN tva_pct REAL NOT NULL DEFAULT 8.5`,
-    `ALTER TABLE quotes ADD COLUMN notes_bas_devis TEXT`
+    `ALTER TABLE quotes ADD COLUMN notes_bas_devis TEXT`,
+    // Phase 2 : compléments
+    `ALTER TABLE suppliers ADD COLUMN telephone TEXT`,
+    `ALTER TABLE suppliers ADD COLUMN email TEXT`,
+    `ALTER TABLE suppliers ADD COLUMN adresse TEXT`,
+    `ALTER TABLE supplier_prices ADD COLUMN reference TEXT`,
+    `ALTER TABLE supplier_prices ADD COLUMN notes TEXT`,
+    `ALTER TABLE sites ADD COLUMN date_debut INTEGER`,
+    `ALTER TABLE sites ADD COLUMN date_fin_prev INTEGER`,
+    `ALTER TABLE sites ADD COLUMN notes TEXT`
   ];
   migrations.forEach(sql => {
     try { wrap.exec(sql); } catch (_) { /* colonne déjà présente */ }
@@ -308,6 +319,7 @@ const SCHEMA_USER = `
     artisan_public_key TEXT,
     statut TEXT NOT NULL DEFAULT 'brouillon',
     kpv_mode TEXT NOT NULL DEFAULT 'fin',
+    kpv_unit TEXT NOT NULL DEFAULT 'pct',
     kpv_pct REAL NOT NULL DEFAULT 0,
     tva_pct REAL NOT NULL DEFAULT 8.5,
     notes_bas_devis TEXT,
@@ -354,9 +366,28 @@ const SCHEMA_USER = `
     FOREIGN KEY (quote_id) REFERENCES quotes(id) ON DELETE SET NULL
   );
 
+  -- Catalogue de matériel / outillage avec amortissement
+  -- Le prix unitaire de location interne est calculé depuis :
+  --   prix_achat × (1 + frais_pct/100) / (duree_amort_annees × usage_par_an)
+  CREATE TABLE IF NOT EXISTS equipment (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nom TEXT NOT NULL,
+    categorie TEXT,
+    prix_achat REAL NOT NULL DEFAULT 0,
+    duree_amort_annees REAL NOT NULL DEFAULT 5,
+    usage_par_an REAL NOT NULL DEFAULT 200,
+    unite_usage TEXT NOT NULL DEFAULT 'h',
+    frais_pct REAL NOT NULL DEFAULT 0,
+    prix_unitaire REAL NOT NULL DEFAULT 0,
+    notes TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
   CREATE INDEX IF NOT EXISTS idx_prices_lot ON prices(lot_id);
   CREATE INDEX IF NOT EXISTS idx_prices_repere ON prices(repere);
   CREATE INDEX IF NOT EXISTS idx_quotes_statut ON quotes(statut);
+  CREATE INDEX IF NOT EXISTS idx_equipment_nom ON equipment(nom);
 `;
 
 module.exports = {
