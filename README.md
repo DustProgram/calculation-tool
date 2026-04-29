@@ -1,4 +1,4 @@
-# RAMEDACE Devis
+# Nucléar Estim
 
 Application desktop (Electron) de chiffrage d'opérations et d'études de prix.
 Architecture **1 application / 2 modules** (Artisan & Étude de prix), avec authentification locale chiffrée et échange de devis entre profils via fichiers `.ndev`.
@@ -91,7 +91,7 @@ L'application utilise **electron-updater** + **GitHub Releases** pour les mises 
 ## Structure du projet
 
 ```
-ramedace-devis/
+nuclear-estim/
 ├── package.json           # Métadonnées et dépendances
 ├── main.js                # Process Electron principal (IPC, DB, crypto)
 ├── preload.js             # Pont sécurisé renderer ↔ main
@@ -129,9 +129,9 @@ Si le mot de passe est perdu :
 
 ### Stockage
 
-- DB système (catalogue des comptes) : `%APPDATA%\RAMEDACE Devis\data\system.db`
-- DB par utilisateur : `%APPDATA%\RAMEDACE Devis\data\user-<id>.db`
-- Boîte de réception `.ndev` : `%APPDATA%\RAMEDACE Devis\inbox\`
+- DB système (catalogue des comptes) : `%APPDATA%\Nucléar Estim\data\system.db`
+- DB par utilisateur : `%APPDATA%\Nucléar Estim\data\user-<id>.db`
+- Boîte de réception `.ndev` : `%APPDATA%\Nucléar Estim\inbox\`
 
 ### Échange de devis (Phase 3)
 

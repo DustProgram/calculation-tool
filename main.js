@@ -18,7 +18,7 @@ let session = null; // { userId, profil, masterKey } après login
 // ------------------------------------------------------------------------
 
 function getAppDir() {
-  // %APPDATA%\RAMEDACE Devis\ sur Windows, équivalent sur autres OS
+  // %APPDATA%\Nucléar Estim\ sur Windows, équivalent sur autres OS
   const dir = path.join(app.getPath('userData'), 'data');
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   return dir;
@@ -67,7 +67,7 @@ function setupAutoUpdate() {
     const choice = await dialog.showMessageBox(mainWindow, {
       type: 'info',
       title: 'Mise à jour prête',
-      message: `RAMEDACE Devis ${info.version} a été téléchargée.`,
+      message: `Nucléar Estim ${info.version} a été téléchargée.`,
       detail: 'L\'application va se fermer pour appliquer la mise à jour. Tes données et ta session seront conservées.',
       buttons: ['Redémarrer maintenant', 'Plus tard'],
       defaultId: 0,
@@ -106,7 +106,7 @@ function createWindow() {
     height: 820,
     minWidth: 1024,
     minHeight: 700,
-    title: 'RAMEDACE Devis',
+    title: 'Nucléar Estim',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

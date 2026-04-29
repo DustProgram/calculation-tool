@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
-  <title>RAMEDACE Devis</title>
+  <title>Nucléar Estim</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -14,9 +14,9 @@
 <section id="screen-auth" class="screen visible">
   <div class="auth-card">
     <div class="brand">
-      <div class="brand-logo">RD</div>
+      <div class="brand-logo">NE</div>
       <div>
-        <h1>RAMEDACE Devis</h1>
+        <h1>Nucléar Estim</h1>
         <p class="muted">Chiffrage d'opérations & études de prix</p>
       </div>
     </div>
@@ -78,7 +78,14 @@
     </div>
   </div>
 
-  <p class="footer-note">v<span id="app-version">…</span> · Données stockées localement, chiffrées</p>
+  <div class="auth-footer">
+    <p class="footer-note">v<span id="app-version">…</span> · Données stockées localement, chiffrées</p>
+    <select id="theme-select-auth" class="theme-select" title="Thème de l'interface">
+      <option value="dark">🌙 Sombre</option>
+      <option value="light">☀️ Clair</option>
+      <option value="beige">📜 Beige</option>
+    </select>
+  </div>
 </section>
 
 <!-- ========================================================== -->
@@ -146,9 +153,9 @@
 <section id="screen-app" class="screen">
   <aside class="sidebar">
     <div class="sidebar-brand">
-      <div class="brand-logo small">RD</div>
+      <div class="brand-logo small">NE</div>
       <div>
-        <div class="brand-title">RAMEDACE Devis</div>
+        <div class="brand-title">Nucléar Estim</div>
         <div class="brand-sub" id="sidebar-profil-label"></div>
       </div>
     </div>
@@ -173,6 +180,11 @@
     </nav>
 
     <div class="sidebar-bottom">
+      <select id="theme-select-app" class="theme-select wide" title="Thème de l'interface">
+        <option value="dark">🌙 Sombre</option>
+        <option value="light">☀️ Clair</option>
+        <option value="beige">📜 Beige</option>
+      </select>
       <button class="menu-item" id="btn-switch-profil">🔄 Changer de profil</button>
       <button class="menu-item" id="btn-data-folder">📁 Dossier de données</button>
       <button class="menu-item" id="btn-logout">🚪 Déconnexion</button>

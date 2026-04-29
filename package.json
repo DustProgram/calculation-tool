@@ -1,7 +1,7 @@
 {
-  "name": "ramedace-devis",
+  "name": "nuclear-estim",
   "version": "0.1.0",
-  "description": "Application de chiffrage et d'études de prix pour artisans et bureaux d'études — Phase 0 (squelette).",
+  "description": "Nucléar Estim — Chiffrage d'opérations et études de prix pour artisans et bureaux d'études.",
   "main": "main.js",
   "author": "Nathan RAMEDACE",
   "license": "UNLICENSED",
@@ -26,8 +26,8 @@
     "electron-builder": "^25.0.5"
   },
   "build": {
-    "appId": "com.ramedace.devis",
-    "productName": "RAMEDACE Devis",
+    "appId": "com.nuclear.estim",
+    "productName": "Nucléar Estim",
     "files": [
       "main.js",
       "preload.js",

@@ -9,6 +9,33 @@ let currentProfil = null;
 let mnemonicSavedShown = false;
 
 // =========================================================================
+// THÈMES (sombre / clair / beige) — persistance localStorage
+// =========================================================================
+
+const THEMES = ['dark', 'light', 'beige'];
+
+function applyTheme(theme) {
+  if (!THEMES.includes(theme)) theme = 'dark';
+  document.documentElement.dataset.theme = theme;
+  try { localStorage.setItem('theme', theme); } catch (_) {}
+  // Synchronise les deux selects
+  ['#theme-select-auth', '#theme-select-app'].forEach(sel => {
+    const el = $(sel);
+    if (el && el.value !== theme) el.value = theme;
+  });
+}
+
+function setupTheme() {
+  let saved = 'dark';
+  try { saved = localStorage.getItem('theme') || 'dark'; } catch (_) {}
+  applyTheme(saved);
+  ['#theme-select-auth', '#theme-select-app'].forEach(sel => {
+    const el = $(sel);
+    if (el) el.addEventListener('change', e => applyTheme(e.target.value));
+  });
+}
+
+// =========================================================================
 // ROUTEUR D'ÉCRANS
 // =========================================================================
 
@@ -323,6 +350,7 @@ function escapeHtml(str) {
 // =========================================================================
 
 window.addEventListener('DOMContentLoaded', async () => {
+  setupTheme();
   bindAuthTabs();
   await bootAuth();
 

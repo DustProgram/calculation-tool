@@ -1,6 +1,10 @@
-/* style.css — Thème sombre RAMEDACE Devis */
+/* style.css — Nucléar Estim — Thèmes : sombre / clair / beige */
 
-:root {
+/* ============================================================
+   THÈME SOMBRE (par défaut)
+   ============================================================ */
+:root,
+:root[data-theme="dark"] {
   --bg-0: #1a1a24;
   --bg-1: #232333;
   --bg-2: #2c2c3e;
@@ -10,10 +14,54 @@
   --text-muted: #9494a8;
   --primary: #5b8def;
   --primary-hover: #6f9bf2;
+  --on-primary: #ffffff;
   --success: #4caf7c;
   --warning: #f0a868;
   --danger: #e15a5a;
   --shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  --gradient: linear-gradient(135deg, #1a1a24 0%, #232333 100%);
+}
+
+/* ============================================================
+   THÈME CLAIR (blanc)
+   ============================================================ */
+:root[data-theme="light"] {
+  --bg-0: #ffffff;
+  --bg-1: #f7f8fa;
+  --bg-2: #eef0f3;
+  --bg-3: #e2e5ea;
+  --border: #d4d8de;
+  --text: #1f2330;
+  --text-muted: #6b7280;
+  --primary: #4a72c9;
+  --primary-hover: #3a62b9;
+  --on-primary: #ffffff;
+  --success: #2e8c57;
+  --warning: #c97f2e;
+  --danger: #c93a3a;
+  --shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --gradient: linear-gradient(135deg, #ffffff 0%, #f0f3f7 100%);
+}
+
+/* ============================================================
+   THÈME BEIGE (papier / sépia)
+   ============================================================ */
+:root[data-theme="beige"] {
+  --bg-0: #f4ecd8;
+  --bg-1: #efe3c7;
+  --bg-2: #e8d9b5;
+  --bg-3: #ddc99e;
+  --border: #c9b489;
+  --text: #3d2e15;
+  --text-muted: #6b5436;
+  --primary: #8b5a2b;
+  --primary-hover: #9d6b3c;
+  --on-primary: #ffffff;
+  --success: #5a7c3a;
+  --warning: #b87333;
+  --danger: #a83838;
+  --shadow: 0 4px 16px rgba(80, 60, 30, 0.15);
+  --gradient: linear-gradient(135deg, #f4ecd8 0%, #ebdfc1 100%);
 }
 
 * {
@@ -72,7 +120,7 @@ input, textarea, select {
 
 .btn.primary {
   background: var(--primary);
-  color: white;
+  color: var(--on-primary);
   border-color: var(--primary);
 }
 .btn.primary:hover:not(:disabled) { background: var(--primary-hover); }
@@ -97,7 +145,7 @@ input, textarea, select {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--bg-0) 0%, var(--bg-1) 100%);
+  background: var(--gradient);
 }
 
 .auth-card {
@@ -128,7 +176,7 @@ input, textarea, select {
   justify-content: center;
   font-weight: 700;
   font-size: 20px;
-  color: white;
+  color: var(--on-primary);
   letter-spacing: -1px;
 }
 
@@ -204,9 +252,38 @@ input, textarea, select {
 .tab-pane textarea { resize: vertical; min-height: 60px; }
 
 .footer-note {
-  margin-top: 16px;
+  margin: 0;
   color: var(--text-muted);
   font-size: 11px;
+}
+
+.auth-footer {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.theme-select {
+  background: var(--bg-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.theme-select:hover {
+  background: var(--bg-3);
+}
+
+.theme-select.wide {
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
 }
 
 /* ---------- ÉCRAN MNEMONIC ---------- */
@@ -279,7 +356,7 @@ input, textarea, select {
 }
 .reveal-btn:active {
   background: var(--primary) !important;
-  color: white;
+  color: var(--on-primary);
   border-color: var(--primary);
 }
 
@@ -308,7 +385,7 @@ input, textarea, select {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--bg-0) 0%, var(--bg-1) 100%);
+  background: var(--gradient);
 }
 
 .profil-container { text-align: center; max-width: 800px; }
@@ -392,7 +469,7 @@ input, textarea, select {
 
 .menu-item.active {
   background: var(--primary);
-  color: white;
+  color: var(--on-primary);
 }
 
 .sidebar-bottom {
