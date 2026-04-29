@@ -1,4 +1,4 @@
-// ui/etude-quotes.js — Page Devis (création, édition, versions, diff, export PDF)
+// ui/etude-quotes.js — Devis avec KPV (intégré ou en bas), TVA, multi-versions
 (function () {
   const { $, $$, escapeHtml, formatEUR, formatNum, formatDate, toast, modal, confirmModal } = window.UI;
 
@@ -14,6 +14,26 @@
     refuse:    { label: '❌ Refusé',    color: '#e15a5a' },
     clos:      { label: '🔒 Clos',      color: '#9494a8' }
   };
+
+  // Calcul des totaux côté UI (mirror de etude.js computeQuoteTotals)
+  function computeTotals(lignes, settings) {
+    const debourse = (lignes || []).reduce((s, l) =>
+      s + (parseFloat(l.quantite) || 0) * (parseFloat(l.prixUnitaire) || 0), 0);
+    const kpvPct = parseFloat(settings.kpv_pct) || 0;
+    const tvaPct = parseFloat(settings.tva_pct) || 0;
+    const kpvMode = settings.kpv_mode || 'fin';
+    let totalHT, frais = 0;
+    if (kpvMode === 'integre') {
+      totalHT = debourse * (1 + kpvPct / 100);
+      frais = totalHT - debourse;
+    } else {
+      frais = debourse * (kpvPct / 100);
+      totalHT = debourse + frais;
+    }
+    const tva = totalHT * (tvaPct / 100);
+    const totalTTC = totalHT + tva;
+    return { debourse, frais, total_ht: totalHT, tva, total_ttc: totalTTC, kpv_mode: kpvMode, kpv_pct: kpvPct, tva_pct: tvaPct };
+  }
 
   async function refresh() {
     const r = await window.api.etude.quotes.list();
@@ -75,9 +95,10 @@
         }
         if (btn.dataset.action === 'pdf') {
           const qData = quotes.find(x => x.id === id);
+          toast('Génération du PDF…', 'info');
           const r = await window.api.etude.quotes.exportPdf({ quoteId: id, versionNumero: qData.last_version });
           if (r.ok) toast('PDF généré : ' + r.path, 'success');
-          else if (!r.canceled) toast('Erreur : ' + r.error, 'danger');
+          else if (!r.canceled) toast('Erreur PDF : ' + r.error, 'danger');
         }
         if (btn.dataset.action === 'delete') {
           const q = quotes.find(x => x.id === id);
@@ -90,11 +111,19 @@
     });
   }
 
-  // Editeur de devis (création + édition + versions)
+  // ---------- ÉDITEUR DE DEVIS ----------
   async function openQuoteEditor(quote) {
     const isEdit = !!quote;
-    let workingLignes = []; // copie locale des lignes en cours d'édition
-    let viewingVersion = null; // numero de la version en cours d'affichage
+    let workingLignes = [];
+    let viewingVersion = null;
+
+    // Settings courants (avec valeurs par défaut sensées pour Martinique)
+    let settings = {
+      kpv_mode: (quote && quote.kpv_mode) || 'fin',
+      kpv_pct: quote ? (quote.kpv_pct || 0) : 25,
+      tva_pct: quote ? (quote.tva_pct || 8.5) : 8.5
+    };
+
     if (isEdit && quote.versions && quote.versions.length) {
       const last = quote.versions[quote.versions.length - 1];
       workingLignes = JSON.parse(JSON.stringify((last.snapshot && last.snapshot.lignes) || []));
@@ -106,12 +135,40 @@
       large: true,
       content: `
         <div class="quote-editor">
+
+          <h3>Informations générales</h3>
           <div class="form-grid">
             <label>Code<input id="q-code" value="${escapeHtml(quote && quote.code || '')}" placeholder="ex: DEV-2026-001"></label>
             <label class="full">Titre *<input id="q-titre" value="${escapeHtml(quote && quote.titre || '')}"></label>
             <label>Client<input id="q-client" value="${escapeHtml(quote && quote.client_nom || '')}"></label>
             <label>Email client<input id="q-email" value="${escapeHtml(quote && quote.client_email || '')}"></label>
+            <label class="full">Adresse client<textarea id="q-adresse" rows="2">${escapeHtml(quote && quote.client_adresse || '')}</textarea></label>
             ${isEdit ? `<label>Statut<select id="q-statut">${Object.entries(STATUTS).map(([k, v]) => `<option value="${k}" ${quote.statut === k ? 'selected' : ''}>${v.label}</option>`).join('')}</select></label>` : ''}
+          </div>
+
+          <h3>💰 Tarification (KPV & TVA)</h3>
+          <div class="kpv-block">
+            <div class="form-row">
+              <label class="radio">
+                <input type="radio" name="kpv-mode" value="fin" ${settings.kpv_mode === 'fin' ? 'checked' : ''}>
+                <span>Marge en bas du devis (le client voit le détail Total HT + Frais)</span>
+              </label>
+            </div>
+            <div class="form-row">
+              <label class="radio">
+                <input type="radio" name="kpv-mode" value="integre" ${settings.kpv_mode === 'integre' ? 'checked' : ''}>
+                <span>Marge intégrée aux PU (le client ne voit qu'un PU final, pas de détail)</span>
+              </label>
+            </div>
+            <div class="form-grid" style="margin-top:8px">
+              <label>Coef. KPV (%)
+                <input id="q-kpv" type="number" step="0.1" value="${settings.kpv_pct}">
+              </label>
+              <label>TVA (%)
+                <input id="q-tva" type="number" step="0.1" value="${settings.tva_pct}">
+                <small class="muted">DOM-TOM : 8.5% &nbsp;·&nbsp; Métropole : 20% &nbsp;·&nbsp; Travaux rénovation : 10% ou 5.5%</small>
+              </label>
+            </div>
           </div>
 
           ${isEdit && quote.versions.length > 1 ? `
@@ -134,28 +191,48 @@
               <th style="width:50px"></th>
             </tr></thead>
             <tbody id="lignes-tbody"></tbody>
-            <tfoot>
-              <tr>
-                <td colspan="5" class="right"><strong>Total HT :</strong></td>
-                <td class="right"><strong id="total-ht">0,00 €</strong></td>
-                <td></td>
-              </tr>
-            </tfoot>
           </table>
           <div class="form-row" style="margin-top:8px">
             <button class="btn ghost" id="btn-add-base">+ Depuis la base</button>
             <button class="btn ghost" id="btn-add-compo">+ Composition</button>
             <button class="btn ghost" id="btn-add-libre">+ Ligne libre</button>
           </div>
+
+          <div class="totaux-block" id="totaux-zone"></div>
+
+          <h3>Notes (bas de devis)</h3>
+          <textarea id="q-notes" rows="3" placeholder="Conditions, validité, modalités de paiement…">${escapeHtml(quote && quote.notes_bas_devis || '')}</textarea>
         </div>
       `,
       footer: `
         <button class="btn ghost" data-action="cancel">Fermer</button>
-        ${isEdit ? '<button class="btn ghost" data-action="save-meta">💾 Enreg. métadonnées</button>' : ''}
+        ${isEdit ? '<button class="btn ghost" data-action="save-meta">💾 Enreg. infos & tarif</button>' : ''}
         ${isEdit ? '<button class="btn primary" data-action="new-version">📌 Enreg. comme nouvelle version</button>' : '<button class="btn primary" data-action="create">Créer le devis</button>'}
       `,
       onMount: ({ body, footer, close }) => {
         const tbody = body.querySelector('#lignes-tbody');
+        const totauxZone = body.querySelector('#totaux-zone');
+
+        function renderTotaux() {
+          const t = computeTotals(workingLignes, settings);
+          const showFrais = t.kpv_mode === 'fin' && t.kpv_pct > 0;
+          const showIntegreFrais = t.kpv_mode === 'integre' && t.kpv_pct > 0;
+          totauxZone.innerHTML = `
+            <table class="totaux-table">
+              ${showFrais ? `
+                <tr><td>Sous-total déboursé HT</td><td class="value">${formatEUR(t.debourse)}</td></tr>
+                <tr><td>Frais et marge (${formatNum(t.kpv_pct, 2)} %)</td><td class="value">${formatEUR(t.frais)}</td></tr>
+              ` : ''}
+              ${showIntegreFrais ? `
+                <tr class="muted"><td>Déboursé sec (info, non visible client)</td><td class="value">${formatEUR(t.debourse)}</td></tr>
+                <tr class="muted"><td>Marge intégrée aux PU (${formatNum(t.kpv_pct, 2)} %)</td><td class="value">${formatEUR(t.frais)}</td></tr>
+              ` : ''}
+              <tr class="total-ht"><td><strong>Total HT</strong></td><td class="value"><strong>${formatEUR(t.total_ht)}</strong></td></tr>
+              <tr><td>TVA (${formatNum(t.tva_pct, 2)} %)</td><td class="value">${formatEUR(t.tva)}</td></tr>
+              <tr class="total-ttc"><td>Total TTC</td><td class="value">${formatEUR(t.total_ttc)}</td></tr>
+            </table>
+          `;
+        }
 
         function renderLignes() {
           tbody.innerHTML = workingLignes.length ? workingLignes.map((l, i) => `
@@ -166,13 +243,9 @@
               <td><input class="l-qte" type="number" step="0.01" value="${l.quantite || 0}" class="right"></td>
               <td><input class="l-pu" type="number" step="0.01" value="${l.prixUnitaire || 0}" class="right"></td>
               <td class="right l-total">${formatEUR((parseFloat(l.quantite) || 0) * (parseFloat(l.prixUnitaire) || 0))}</td>
-              <td class="center"><button class="btn-icon danger" data-action="remove-l">🗑</button></td>
+              <td class="center"><button class="btn-icon danger" data-action="rm-l">🗑</button></td>
             </tr>
           `).join('') : '<tr><td colspan="7" class="empty">Aucune ligne. Ajoute-en une.</td></tr>';
-
-          let total = 0;
-          workingLignes.forEach(l => total += (parseFloat(l.quantite) || 0) * (parseFloat(l.prixUnitaire) || 0));
-          body.querySelector('#total-ht').textContent = formatEUR(total);
 
           $$('tr[data-idx]', tbody).forEach(tr => {
             const idx = parseInt(tr.dataset.idx, 10);
@@ -184,54 +257,58 @@
               workingLignes[idx].prixUnitaire = pu;
               workingLignes[idx].designation = tr.querySelector('.l-desig').value;
               workingLignes[idx].unite = tr.querySelector('.l-unite').value;
-              let total = 0;
-              workingLignes.forEach(l => total += (parseFloat(l.quantite) || 0) * (parseFloat(l.prixUnitaire) || 0));
-              body.querySelector('#total-ht').textContent = formatEUR(total);
+              renderTotaux();
             };
             tr.querySelector('.l-desig').oninput = recalc;
             tr.querySelector('.l-unite').oninput = recalc;
             tr.querySelector('.l-qte').oninput = recalc;
             tr.querySelector('.l-pu').oninput = recalc;
-            tr.querySelector('[data-action="remove-l"]').onclick = () => {
+            tr.querySelector('[data-action="rm-l"]').onclick = () => {
               workingLignes.splice(idx, 1);
               renderLignes();
+              renderTotaux();
             };
           });
         }
-        renderLignes();
 
+        renderLignes();
+        renderTotaux();
+
+        // Inputs KPV/TVA → recalc en live
+        $$('input[name="kpv-mode"]', body).forEach(r => {
+          r.onchange = () => { settings.kpv_mode = r.value; renderTotaux(); };
+        });
+        body.querySelector('#q-kpv').oninput = (e) => { settings.kpv_pct = parseFloat(e.target.value) || 0; renderTotaux(); };
+        body.querySelector('#q-tva').oninput = (e) => { settings.tva_pct = parseFloat(e.target.value) || 0; renderTotaux(); };
+
+        // Boutons d'ajout
         body.querySelector('#btn-add-libre').onclick = () => {
           workingLignes.push({ designation: '', unite: '', quantite: 1, prixUnitaire: 0 });
           renderLignes();
+          renderTotaux();
         };
         body.querySelector('#btn-add-base').onclick = async () => {
           const picked = await window.openPricePicker();
           if (picked) {
             workingLignes.push({
-              priceId: picked.id,
-              designation: picked.designation,
-              unite: picked.unite || '',
-              quantite: 1,
-              prixUnitaire: picked.prix
+              priceId: picked.id, designation: picked.designation,
+              unite: picked.unite || '', quantite: 1, prixUnitaire: picked.prix
             });
-            renderLignes();
+            renderLignes(); renderTotaux();
           }
         };
         body.querySelector('#btn-add-compo').onclick = async () => {
           const picked = await window.openCompoPicker();
           if (picked) {
             workingLignes.push({
-              compositionId: picked.id,
-              designation: picked.nom,
-              unite: picked.unite || '',
-              quantite: 1,
-              prixUnitaire: picked.total
+              compositionId: picked.id, designation: picked.nom,
+              unite: picked.unite || '', quantite: 1, prixUnitaire: picked.total
             });
-            renderLignes();
+            renderLignes(); renderTotaux();
           }
         };
 
-        // Versions : changer de version pour la consulter
+        // Versions : changer
         $$('.version-chip', body).forEach(chip => {
           chip.onclick = () => {
             const num = parseInt(chip.dataset.version, 10);
@@ -241,7 +318,7 @@
               viewingVersion = num;
               $$('.version-chip', body).forEach(c => c.classList.remove('active'));
               chip.classList.add('active');
-              renderLignes();
+              renderLignes(); renderTotaux();
             }
           };
         });
@@ -256,45 +333,43 @@
           };
         }
 
-        // Footer actions
+        // Footer
         footer.querySelector('[data-action="cancel"]').onclick = () => close(null);
+
+        const collectMeta = () => ({
+          code: body.querySelector('#q-code').value.trim(),
+          titre: body.querySelector('#q-titre').value.trim(),
+          clientNom: body.querySelector('#q-client').value.trim(),
+          clientEmail: body.querySelector('#q-email').value.trim(),
+          clientAdresse: body.querySelector('#q-adresse').value.trim(),
+          kpvMode: settings.kpv_mode,
+          kpvPct: settings.kpv_pct,
+          tvaPct: settings.tva_pct,
+          notesBasDevis: body.querySelector('#q-notes').value.trim()
+        });
 
         const saveMetaBtn = footer.querySelector('[data-action="save-meta"]');
         if (saveMetaBtn) saveMetaBtn.onclick = async () => {
-          const payload = {
-            id: quote.id,
-            code: body.querySelector('#q-code').value.trim(),
-            titre: body.querySelector('#q-titre').value.trim(),
-            clientNom: body.querySelector('#q-client').value.trim(),
-            clientEmail: body.querySelector('#q-email').value.trim(),
-            statut: body.querySelector('#q-statut').value
-          };
+          const payload = { id: quote.id, ...collectMeta(), statut: body.querySelector('#q-statut').value };
           if (!payload.titre) return toast('Titre requis', 'danger');
           const r = await window.api.etude.quotes.updateMeta(payload);
-          if (r.ok) { toast('Métadonnées sauvegardées', 'success'); refresh(); }
+          if (r.ok) { toast('Enregistré', 'success'); refresh(); }
           else toast('Erreur : ' + r.error, 'danger');
         };
 
         const newVerBtn = footer.querySelector('[data-action="new-version"]');
         if (newVerBtn) newVerBtn.onclick = async () => {
-          if (!await confirmModal('Créer une nouvelle version ?', `Une nouvelle version sera créée avec les modifications actuelles. La version précédente reste consultable.`)) return;
+          if (!await confirmModal('Créer une nouvelle version ?', 'Une nouvelle version sera créée avec les modifications actuelles. La version précédente reste consultable.')) return;
+          // Sauve aussi les méta (KPV/TVA peuvent avoir changé)
+          await window.api.etude.quotes.updateMeta({ id: quote.id, ...collectMeta() });
           const r = await window.api.etude.quotes.addVersion({ id: quote.id, lignes: workingLignes });
-          if (r.ok) {
-            toast('Version v' + r.numero + ' créée', 'success');
-            close(true);
-            refresh();
-          } else toast('Erreur : ' + r.error, 'danger');
+          if (r.ok) { toast('Version v' + r.numero + ' créée', 'success'); close(true); refresh(); }
+          else toast('Erreur : ' + r.error, 'danger');
         };
 
         const createBtn = footer.querySelector('[data-action="create"]');
         if (createBtn) createBtn.onclick = async () => {
-          const payload = {
-            code: body.querySelector('#q-code').value.trim(),
-            titre: body.querySelector('#q-titre').value.trim(),
-            clientNom: body.querySelector('#q-client').value.trim(),
-            clientEmail: body.querySelector('#q-email').value.trim(),
-            lignes: workingLignes
-          };
+          const payload = { ...collectMeta(), lignes: workingLignes };
           if (!payload.titre) return toast('Titre requis', 'danger');
           const r = await window.api.etude.quotes.create(payload);
           if (r.ok) { toast('Devis créé', 'success'); close(true); refresh(); }

@@ -902,3 +902,133 @@ input, textarea, select {
   padding: 60px;
   color: var(--text-muted);
 }
+
+/* ---------- Compositions : 3 sections ---------- */
+
+.compo-section {
+  margin: 16px 0 12px;
+  background: var(--bg-2);
+  border-radius: 8px;
+  padding: 8px 12px 4px;
+}
+
+.compo-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0 8px 8px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.compo-section-header h3 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.compo-section-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.compo-items-table {
+  background: transparent;
+}
+
+.compo-items-table tbody td {
+  padding: 4px 8px;
+}
+
+.compo-total-block {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 16px;
+  padding: 14px 18px;
+  background: var(--primary);
+  color: var(--on-primary);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.compo-total-block .big {
+  font-size: 22px;
+  font-weight: 600;
+}
+
+/* ---------- KPV / TVA ---------- */
+
+.kpv-block {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 8px 0 16px;
+}
+
+label.radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+label.radio input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+}
+
+.kpv-block small {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+/* ---------- Totaux devis ---------- */
+
+.totaux-block {
+  margin: 16px 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.totaux-table {
+  border-collapse: collapse;
+  min-width: 360px;
+}
+
+.totaux-table td {
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+.totaux-table td.value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  min-width: 130px;
+}
+
+.totaux-table tr.muted td {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-style: italic;
+}
+
+.totaux-table tr.total-ht td {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  font-size: 14px;
+}
+
+.totaux-table tr.total-ttc td {
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 600;
+  font-size: 15px;
+  border-radius: 6px;
+}
