@@ -443,6 +443,38 @@ const SCHEMA_USER = `
   CREATE INDEX IF NOT EXISTS idx_compta_ec_date ON compta_ecritures(date);
   CREATE INDEX IF NOT EXISTS idx_compta_ec_site ON compta_ecritures(site_id);
   CREATE INDEX IF NOT EXISTS idx_compta_sit_site ON compta_situations(site_id);
+
+  -- ============================================================
+  -- LICENCES MODULAIRES (Phase 3) — fichiers .nelic importés
+  -- ============================================================
+  CREATE TABLE IF NOT EXISTS user_licenses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    license_id TEXT,                  -- ID unique de la licence (du .nelic)
+    user_name TEXT,                   -- "Pour qui" affichage
+    modules TEXT NOT NULL,            -- JSON array ['etude','compta']
+    issued_at INTEGER,                -- timestamp d'émission
+    expires_at INTEGER,               -- timestamp d'expiration (null = jamais)
+    payload TEXT NOT NULL,            -- JSON complet du .nelic (avec signature)
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_lic_id ON user_licenses(license_id);
+
+  -- ============================================================
+  -- SÉCURITÉ (Phase 3) — Secrets utilisateur (TOTP, mode éditeur)
+  -- ============================================================
+  -- Table à 1 ligne (singleton) : id = 1
+  CREATE TABLE IF NOT EXISTS user_secrets (
+    id INTEGER PRIMARY KEY DEFAULT 1,
+    totp_secret BLOB,                  -- Secret TOTP chiffré par DEK
+    totp_enabled INTEGER DEFAULT 0,    -- 0=désactivée, 1=activée
+    totp_recovery_hashes TEXT,         -- JSON array de hashes SHA-256
+    master_private_key BLOB,           -- Clé privée Ed25519 (mode éditeur), chiffrée par DEK
+    CHECK (id = 1)
+  );
+
+  -- Initialise la ligne unique au premier accès
+  INSERT OR IGNORE INTO user_secrets (id) VALUES (1);
 `;
 
 module.exports = {
