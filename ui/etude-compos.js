@@ -122,7 +122,8 @@
             <div class="compo-section-header" style="border-left:4px solid ${cat.color}">
               <h3 style="color:${cat.color}">${cat.label}</h3>
               <div class="compo-section-actions">
-                <button class="btn ghost small" data-add-base="${cat.key}">+ Depuis base</button>
+                <button class="btn ghost small" data-add-base="${cat.key}">+ Base de prix</button>
+                ${cat.key === 'materiel' ? `<button class="btn ghost small" data-add-eq="${cat.key}">+ Matériel amorti</button>` : ''}
                 <button class="btn ghost small" data-add-libre="${cat.key}">+ Ligne libre</button>
               </div>
             </div>
@@ -240,6 +241,26 @@
                 categorie: btn.dataset.addBase,
                 quantite: 1,
                 prixUnitaire: picked.prix,
+                tauxPerte: 0
+              });
+              renderAll();
+            }
+          };
+        });
+        $$('[data-add-eq]', body).forEach(btn => {
+          btn.onclick = async () => {
+            if (!window.openEquipmentPicker) {
+              return window.UI.toast('Module matériel non chargé', 'danger');
+            }
+            const picked = await window.openEquipmentPicker();
+            if (picked) {
+              items.push({
+                priceId: null,
+                designationLibre: picked.nom + ' (amorti)',
+                unite: picked.unite_usage || 'h',
+                categorie: btn.dataset.addEq,
+                quantite: 1,
+                prixUnitaire: picked.prix_unitaire,
                 tauxPerte: 0
               });
               renderAll();

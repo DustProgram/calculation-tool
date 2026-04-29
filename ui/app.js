@@ -271,26 +271,23 @@ const PAGES = {
   'artisan-home': () => `
     <h1>Tableau de bord — Artisan</h1>
     <p>Bienvenue ${escapeHtml(currentUser.displayName || currentUser.login)}. Voici l'état de ton activité.</p>
-    <div class="kpi-grid">
-      <div class="kpi-card"><div class="kpi-label">Devis reçus</div><div class="kpi-value">0</div></div>
-      <div class="kpi-card"><div class="kpi-label">Chantiers en cours</div><div class="kpi-value">0</div></div>
-      <div class="kpi-card"><div class="kpi-label">KPV global</div><div class="kpi-value">—</div></div>
-      <div class="kpi-card"><div class="kpi-label">Fournisseurs</div><div class="kpi-value">0</div></div>
-    </div>
-    <div class="placeholder-card">
-      <div class="emoji">🚧</div>
-      <p>Les modules métier seront branchés en Phase 2. Pour l'instant, tu peux explorer l'arborescence dans la barre latérale.</p>
+    <div class="kpi-grid" id="artisan-home-kpis">
+      <div class="kpi-card"><div class="kpi-label">Devis reçus</div><div class="kpi-value">…</div></div>
+      <div class="kpi-card"><div class="kpi-label">Chantiers en cours</div><div class="kpi-value">…</div></div>
+      <div class="kpi-card"><div class="kpi-label">KPV global</div><div class="kpi-value">…</div></div>
+      <div class="kpi-card"><div class="kpi-label">Matériel</div><div class="kpi-value">…</div></div>
+      <div class="kpi-card"><div class="kpi-label">Fournisseurs</div><div class="kpi-value">…</div></div>
+      <div class="kpi-card"><div class="kpi-label">Coût trajet/jour</div><div class="kpi-value">…</div></div>
     </div>`,
-  'artisan-kpv': () => placeholder('⚙️ Paramètres KPV', 2,
-    'Définition du KPV global et par lot : déboursé sec, frais de chantier (%), frais d\'opération (%), frais généraux (%), bénéfice (%), aléas (%). Calcul automatique du coefficient de prix de vente.'),
-  'artisan-logistic': () => placeholder('🚐 Déplacements & logistique', 2,
-    'Prix carburant, consommation véhicule, distance siège ↔ chantier, nombre de trajets. Calcul automatique du coût de déplacement à intégrer dans les frais de chantier.'),
-  'artisan-suppliers': () => placeholder('🏪 Fournisseurs', 2,
-    'Carnet de fournisseurs avec prix négociés. Sert de base personnelle pour le chiffrage de tes propres devis.'),
+
+  // Pages avancées artisan : on délègue
+  'artisan-kpv': null,
+  'artisan-equipment': null,
+  'artisan-suppliers': null,
+  'artisan-logistic': null,
+  'artisan-sites': null,
   'artisan-quotes-in': () => placeholder('📥 Devis reçus', 3,
     'Devis chiffrés reçus de l\'étude de prix sous forme de fichiers .ndev. Import par drag-drop ou via dossier surveillé. Statuts : Reçu → Lu → Accepté/Refusé/Modifications demandées.'),
-  'artisan-sites': () => placeholder('🏗 Suivi chantier', 2,
-    'Suivi des chantiers issus de devis acceptés : avancement (%), statut (à démarrer / en cours / terminé / facturé), pièces jointes.'),
 
   // ---- Étude ----
   'etude-home': () => `
@@ -301,22 +298,37 @@ const PAGES = {
       <div class="kpi-card"><div class="kpi-label">Compositions</div><div class="kpi-value">…</div></div>
       <div class="kpi-card"><div class="kpi-label">Devis</div><div class="kpi-value">…</div></div>
       <div class="kpi-card"><div class="kpi-label">Lots</div><div class="kpi-value">…</div></div>
+      <div class="kpi-card"><div class="kpi-label">Matériel partagé</div><div class="kpi-value">…</div></div>
     </div>`,
 
-  // Pages avancées : on délègue au module dédié
-  'etude-prices': null,  // gérée par EtudePricesPage.render()
+  'etude-prices': null,
   'etude-compos': null,
   'etude-quotes': null,
   'etude-index':  null
 };
 
+function placeholder(title, phase, description) {
+  return `
+    <h1>${title}<span class="badge phase${phase}">Phase ${phase}</span></h1>
+    <p>${description}</p>
+    <div class="placeholder-card">
+      <div class="emoji">🚧</div>
+      <p>Module à implémenter en Phase ${phase}.</p>
+    </div>`;
+}
+
 async function renderPage(pageId) {
   const content = $('#content');
   // Pages avancées : on délègue
-  if (pageId === 'etude-prices' && window.EtudePricesPage) return window.EtudePricesPage.render(content);
-  if (pageId === 'etude-compos' && window.EtudeComposPage) return window.EtudeComposPage.render(content);
-  if (pageId === 'etude-quotes' && window.EtudeQuotesPage) return window.EtudeQuotesPage.render(content);
-  if (pageId === 'etude-index'  && window.EtudeIndexPage)  return window.EtudeIndexPage.render(content);
+  if (pageId === 'etude-prices'    && window.EtudePricesPage)    return window.EtudePricesPage.render(content);
+  if (pageId === 'etude-compos'    && window.EtudeComposPage)    return window.EtudeComposPage.render(content);
+  if (pageId === 'etude-quotes'    && window.EtudeQuotesPage)    return window.EtudeQuotesPage.render(content);
+  if (pageId === 'etude-index'     && window.EtudeIndexPage)     return window.EtudeIndexPage.render(content);
+  if (pageId === 'artisan-kpv'       && window.ArtisanKpvPage)       return window.ArtisanKpvPage.render(content);
+  if (pageId === 'artisan-equipment' && window.ArtisanEquipmentPage) return window.ArtisanEquipmentPage.render(content);
+  if (pageId === 'artisan-suppliers' && window.ArtisanSuppliersPage) return window.ArtisanSuppliersPage.render(content);
+  if (pageId === 'artisan-logistic'  && window.ArtisanLogisticPage)  return window.ArtisanLogisticPage.render(content);
+  if (pageId === 'artisan-sites'     && window.ArtisanSitesPage)     return window.ArtisanSitesPage.render(content);
 
   const renderer = PAGES[pageId];
   content.innerHTML = renderer ? renderer() : `<h1>Page inconnue</h1>`;
@@ -324,20 +336,39 @@ async function renderPage(pageId) {
   // Cas spécial : home étude → on charge les vrais KPI
   if (pageId === 'etude-home') {
     try {
-      const [pr, cr, qr, lr] = await Promise.all([
+      const [pr, cr, qr, lr, er] = await Promise.all([
         window.api.etude.prices.list({}),
         window.api.etude.compos.list(),
         window.api.etude.quotes.list(),
-        window.api.etude.lots.list()
+        window.api.etude.lots.list(),
+        window.api.artisan.equipment.list({})
       ]);
-      const kpis = $('#etude-home-kpis');
-      if (kpis) {
-        const cells = kpis.querySelectorAll('.kpi-value');
-        cells[0].textContent = pr.ok ? pr.total : '—';
-        cells[1].textContent = cr.ok ? cr.data.length : '—';
-        cells[2].textContent = qr.ok ? qr.data.length : '—';
-        cells[3].textContent = lr.ok ? lr.data.length : '—';
-      }
+      const cells = $('#etude-home-kpis').querySelectorAll('.kpi-value');
+      cells[0].textContent = pr.ok ? pr.total : '—';
+      cells[1].textContent = cr.ok ? cr.data.length : '—';
+      cells[2].textContent = qr.ok ? qr.data.length : '—';
+      cells[3].textContent = lr.ok ? lr.data.length : '—';
+      cells[4].textContent = er.ok ? er.data.length : '—';
+    } catch (_) {}
+  }
+  // Cas spécial : home artisan → KPI Phase 2
+  if (pageId === 'artisan-home') {
+    try {
+      const [kpv, sites, eq, sup, log] = await Promise.all([
+        window.api.artisan.kpv.listAll(),
+        window.api.artisan.sites.list(),
+        window.api.artisan.equipment.list({}),
+        window.api.artisan.suppliers.list(),
+        window.api.artisan.logistic.get()
+      ]);
+      const cells = $('#artisan-home-kpis').querySelectorAll('.kpi-value');
+      const enCours = sites.ok ? sites.data.filter(s => s.statut === 'en_cours').length : 0;
+      cells[0].textContent = '—'; // Devis reçus = Phase 3
+      cells[1].textContent = enCours;
+      cells[2].textContent = kpv.ok ? '×' + (kpv.data.global_coef || 1).toFixed(3) : '—';
+      cells[3].textContent = eq.ok ? eq.data.length : '—';
+      cells[4].textContent = sup.ok ? sup.data.length : '—';
+      cells[5].textContent = log.ok && log.computed ? log.computed.cout_total_jour.toLocaleString('fr-FR', { minimumFractionDigits: 2 }) + ' €' : '—';
     } catch (_) {}
   }
 }
