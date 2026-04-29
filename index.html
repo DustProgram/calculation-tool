@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
+  <title>RAMEDACE Devis</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ========================================================== -->
+<!-- ÉCRAN AUTH                                                  -->
+<!-- ========================================================== -->
+<section id="screen-auth" class="screen visible">
+  <div class="auth-card">
+    <div class="brand">
+      <div class="brand-logo">RD</div>
+      <div>
+        <h1>RAMEDACE Devis</h1>
+        <p class="muted">Chiffrage d'opérations & études de prix</p>
+      </div>
+    </div>
+
+    <!-- Onglets login / signup / recover -->
+    <div class="tabs" id="auth-tabs">
+      <button class="tab active" data-tab="login">Connexion</button>
+      <button class="tab" data-tab="signup">Créer un compte</button>
+      <button class="tab" data-tab="recover">Mot de passe oublié</button>
+    </div>
+
+    <!-- Login -->
+    <div class="tab-pane visible" id="tab-login">
+      <label>Identifiant
+        <input type="text" id="login-username" autocomplete="username" placeholder="ex: nathan">
+      </label>
+      <label>Mot de passe
+        <input type="password" id="login-password" autocomplete="current-password" placeholder="••••••••">
+      </label>
+      <button class="btn primary" id="btn-login">Se connecter</button>
+      <p class="error" id="login-error"></p>
+    </div>
+
+    <!-- Signup -->
+    <div class="tab-pane" id="tab-signup">
+      <label>Identifiant <span class="muted">(servira de login)</span>
+        <input type="text" id="signup-username" placeholder="ex: nathan">
+      </label>
+      <label>Nom affiché
+        <input type="text" id="signup-displayname" placeholder="ex: Nathan RAMEDACE">
+      </label>
+      <label>Mot de passe <span class="muted">(8 caractères min)</span>
+        <input type="password" id="signup-password" placeholder="••••••••">
+      </label>
+      <label>Profil par défaut
+        <select id="signup-profil">
+          <option value="etude">Étude de prix</option>
+          <option value="artisan">Artisan</option>
+        </select>
+      </label>
+      <button class="btn primary" id="btn-signup">Créer le compte</button>
+      <p class="error" id="signup-error"></p>
+    </div>
+
+    <!-- Recover -->
+    <div class="tab-pane" id="tab-recover">
+      <p class="muted small">Saisis ta phrase de récupération de 12 mots et un nouveau mot de passe.</p>
+      <label>Identifiant
+        <input type="text" id="recover-username" placeholder="ex: nathan">
+      </label>
+      <label>Phrase de récupération <span class="muted">(12 mots séparés par des espaces)</span>
+        <textarea id="recover-mnemonic" rows="3" placeholder="abandon ability able about above absent absorb abstract absurd abuse access accident"></textarea>
+      </label>
+      <label>Nouveau mot de passe
+        <input type="password" id="recover-password" placeholder="••••••••">
+      </label>
+      <button class="btn primary" id="btn-recover">Réinitialiser</button>
+      <p class="error" id="recover-error"></p>
+    </div>
+  </div>
+
+  <p class="footer-note">v<span id="app-version">…</span> · Données stockées localement, chiffrées</p>
+</section>
+
+<!-- ========================================================== -->
+<!-- ÉCRAN PHRASE DE RÉCUPÉRATION (post-signup)                  -->
+<!-- ========================================================== -->
+<section id="screen-mnemonic" class="screen">
+  <div class="auth-card large">
+    <h1>🔐 Phrase de récupération</h1>
+    <p class="warning">
+      <strong>Action critique.</strong> Cette phrase de 12 mots est la <em>seule</em> manière
+      de récupérer ton compte si tu oublies ton mot de passe. <strong>Sans elle,
+      tes données sont définitivement perdues.</strong>
+    </p>
+    <ul class="advice">
+      <li>Imprime-la ou note-la sur papier, range-la dans un endroit sûr.</li>
+      <li>Ne la stocke pas en clair sur ton ordinateur.</li>
+      <li>Ne l'envoie à personne, jamais.</li>
+      <li>Anthropic, Microsoft, Google ou n'importe qui d'autre ne peut PAS te la redonner.</li>
+    </ul>
+    <div class="mnemonic-grid" id="mnemonic-grid"></div>
+
+    <div class="actions">
+      <button class="btn ghost" id="btn-mnemonic-copy">📋 Copier</button>
+      <button class="btn ghost" id="btn-mnemonic-print">🖨 Imprimer</button>
+    </div>
+
+    <label class="checkbox">
+      <input type="checkbox" id="chk-mnemonic-saved">
+      <span>J'ai mis cette phrase en sécurité, je comprends qu'elle ne sera plus jamais affichée.</span>
+    </label>
+
+    <button class="btn primary" id="btn-mnemonic-continue" disabled>Continuer</button>
+  </div>
+</section>
+
+<!-- ========================================================== -->
+<!-- ÉCRAN CHOIX DE PROFIL                                       -->
+<!-- ========================================================== -->
+<section id="screen-profil" class="screen">
+  <div class="profil-container">
+    <h1>Bonjour <span id="profil-username"></span></h1>
+    <p class="muted">Quel profil veux-tu utiliser pour cette session ?</p>
+
+    <div class="profil-cards">
+      <div class="profil-card" data-profil="artisan">
+        <div class="profil-icon">🛠️</div>
+        <h2>Artisan</h2>
+        <p>Gestion des frais d'entreprise, KPV, déplacements, fournisseurs, suivi de chantier, devis reçus.</p>
+      </div>
+      <div class="profil-card" data-profil="etude">
+        <div class="profil-icon">📐</div>
+        <h2>Étude de prix</h2>
+        <p>Base de prix, compositions, création et envoi de devis, indexation BT01/ILC.</p>
+      </div>
+    </div>
+
+    <button class="btn ghost small" id="btn-logout-profil">Se déconnecter</button>
+  </div>
+</section>
+
+<!-- ========================================================== -->
+<!-- ÉCRAN APP (avec sidebar selon profil)                       -->
+<!-- ========================================================== -->
+<section id="screen-app" class="screen">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-logo small">RD</div>
+      <div>
+        <div class="brand-title">RAMEDACE Devis</div>
+        <div class="brand-sub" id="sidebar-profil-label"></div>
+      </div>
+    </div>
+
+    <!-- Menu Artisan -->
+    <nav class="menu" id="menu-artisan">
+      <button class="menu-item active" data-page="artisan-home">🏠 Accueil</button>
+      <button class="menu-item" data-page="artisan-kpv">⚙️ Paramètres KPV</button>
+      <button class="menu-item" data-page="artisan-logistic">🚐 Déplacements & logistique</button>
+      <button class="menu-item" data-page="artisan-suppliers">🏪 Fournisseurs</button>
+      <button class="menu-item" data-page="artisan-quotes-in">📥 Devis reçus</button>
+      <button class="menu-item" data-page="artisan-sites">🏗 Suivi chantier</button>
+    </nav>
+
+    <!-- Menu Étude -->
+    <nav class="menu" id="menu-etude">
+      <button class="menu-item active" data-page="etude-home">🏠 Accueil</button>
+      <button class="menu-item" data-page="etude-prices">💶 Base de prix</button>
+      <button class="menu-item" data-page="etude-compos">🧱 Compositions</button>
+      <button class="menu-item" data-page="etude-quotes">📄 Devis</button>
+      <button class="menu-item" data-page="etude-index">📈 Indexation BT01/ILC</button>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <button class="menu-item" id="btn-switch-profil">🔄 Changer de profil</button>
+      <button class="menu-item" id="btn-data-folder">📁 Dossier de données</button>
+      <button class="menu-item" id="btn-logout">🚪 Déconnexion</button>
+    </div>
+  </aside>
+
+  <main class="content" id="content">
+    <!-- Le contenu est injecté par app.js -->
+  </main>
+</section>
+
+<script src="app.js"></script>
+</body>
+</html>

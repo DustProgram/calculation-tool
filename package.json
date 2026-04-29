@@ -1,0 +1,58 @@
+{
+  "name": "ramedace-devis",
+  "version": "0.1.0",
+  "description": "Application de chiffrage et d'études de prix pour artisans et bureaux d'études — Phase 0 (squelette).",
+  "main": "main.js",
+  "author": "Nathan RAMEDACE",
+  "license": "UNLICENSED",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DustProgram/calculation-tool.git"
+  },
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "publish": "electron-builder --win --publish always"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "bip39": "^3.1.0",
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "^32.0.0",
+    "electron-builder": "^25.0.5"
+  },
+  "build": {
+    "appId": "com.ramedace.devis",
+    "productName": "RAMEDACE Devis",
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "ui/**/*",
+      "package.json"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "DustProgram",
+        "repo": "calculation-tool",
+        "releaseType": "release"
+      }
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}
