@@ -11,6 +11,7 @@ const dbMod = require('./src/db');
 const ndev = require('./src/ndev');
 const etude = require('./src/etude');
 const artisan = require('./src/artisan');
+const compta = require('./src/compta');
 const excelMod = require('./src/excel');
 const pdfMod = require('./src/pdf');
 
@@ -607,6 +608,65 @@ ipcMain.handle('artisan:sites:update', async (_e, { id, ...payload }) => {
 });
 ipcMain.handle('artisan:sites:delete', async (_e, { id }) => {
   try { artisan.deleteSite(requireSession(), id); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+// ------------------------------------------------------------------------
+// IPC : module Comptabilité
+// ------------------------------------------------------------------------
+
+ipcMain.handle('compta:config:get', async () => {
+  try { return { ok: true, data: compta.getConfig(requireSession()) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('compta:config:set', async (_e, payload) => {
+  try { return { ok: true, data: compta.setConfig(requireSession(), payload) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('compta:config:plan', async () => {
+  return { ok: true, data: { recettes: compta.COMPTES_RECETTES, charges: compta.COMPTES_CHARGES } };
+});
+
+ipcMain.handle('compta:ecritures:list', async (_e, q) => {
+  try { return { ok: true, data: compta.listEcritures(requireSession(), q || {}) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('compta:ecritures:create', async (_e, payload) => {
+  try { return { ok: true, id: compta.createEcriture(requireSession(), payload) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('compta:ecritures:update', async (_e, { id, ...payload }) => {
+  try { compta.updateEcriture(requireSession(), id, payload); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('compta:ecritures:delete', async (_e, { id }) => {
+  try { compta.deleteEcriture(requireSession(), id); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('compta:situations:list', async (_e, { site_id }) => {
+  try { return { ok: true, data: compta.listSituations(requireSession(), site_id) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('compta:situations:create', async (_e, payload) => {
+  try { return { ok: true, id: compta.createSituation(requireSession(), payload) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('compta:situations:delete', async (_e, { id }) => {
+  try { compta.deleteSituation(requireSession(), id); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('compta:dashboard', async (_e, q) => {
+  try { return { ok: true, data: compta.computeDashboard(requireSession(), q || {}) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('compta:chantiersEnCours', async (_e, { dateRef } = {}) => {
+  try { return { ok: true, data: compta.computeChantiersEnCours(requireSession(), dateRef) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('compta:margeChantiers', async (_e, q) => {
+  try { return { ok: true, data: compta.computeMargeChantiers(requireSession(), q || {}) }; }
   catch (e) { return { ok: false, error: e.message }; }
 });
 

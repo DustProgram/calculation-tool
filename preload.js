@@ -100,6 +100,28 @@ contextBridge.exposeInMainWorld('api', {
       delete: (p) => ipcRenderer.invoke('artisan:sites:delete', p)
     }
   },
+  // Module Comptabilité
+  compta: {
+    config: {
+      get: () => ipcRenderer.invoke('compta:config:get'),
+      set: (p) => ipcRenderer.invoke('compta:config:set', p),
+      plan: () => ipcRenderer.invoke('compta:config:plan')
+    },
+    ecritures: {
+      list: (q) => ipcRenderer.invoke('compta:ecritures:list', q),
+      create: (p) => ipcRenderer.invoke('compta:ecritures:create', p),
+      update: (p) => ipcRenderer.invoke('compta:ecritures:update', p),
+      delete: (p) => ipcRenderer.invoke('compta:ecritures:delete', p)
+    },
+    situations: {
+      list: (p) => ipcRenderer.invoke('compta:situations:list', p),
+      create: (p) => ipcRenderer.invoke('compta:situations:create', p),
+      delete: (p) => ipcRenderer.invoke('compta:situations:delete', p)
+    },
+    dashboard: (q) => ipcRenderer.invoke('compta:dashboard', q),
+    chantiersEnCours: (q) => ipcRenderer.invoke('compta:chantiersEnCours', q),
+    margeChantiers: (q) => ipcRenderer.invoke('compta:margeChantiers', q)
+  },
   // .ndev (stubs Phase 0)
   ndev: {
     exportStub: (payload) => ipcRenderer.invoke('ndev:exportStub', payload),
