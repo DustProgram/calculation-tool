@@ -44,7 +44,16 @@ function toast(msg, type = 'info') {
 }
 
 // Modale générique
-function modal({ title, content, onMount, footer, large = false, onClose }) {
+//
+// Comportement de fermeture :
+//   - Croix (×) : ferme directement (close(null))
+//   - Bouton Annuler (data-action="cancel") : ferme directement
+//   - Touche Échap : équivaut au clic sur la croix
+//   - Clic sur le fond (backdrop) : NE FERME PAS — anime la modale pour signaler à
+//     l'utilisateur qu'il doit utiliser la croix ou Annuler. Évite les pertes
+//     accidentelles de saisie. Comportement désactivable avec backdropClose: true
+//     pour les modales purement informatives (ex: affichage QR code).
+function modal({ title, content, onMount, footer, large = false, onClose, backdropClose = false }) {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -52,25 +61,55 @@ function modal({ title, content, onMount, footer, large = false, onClose }) {
       <div class="modal-card ${large ? 'large' : ''}">
         <div class="modal-header">
           <h2>${escapeHtml(title || '')}</h2>
-          <button class="modal-close" type="button">×</button>
+          <button class="modal-close" type="button" title="Fermer">×</button>
         </div>
         <div class="modal-body"></div>
         <div class="modal-footer"></div>
       </div>
     `;
+    const card = overlay.querySelector('.modal-card');
     const body = overlay.querySelector('.modal-body');
     const footerEl = overlay.querySelector('.modal-footer');
     if (typeof content === 'string') body.innerHTML = content;
     else if (content instanceof HTMLElement) body.appendChild(content);
     if (footer) footerEl.innerHTML = footer;
     document.body.appendChild(overlay);
+
+    let closed = false;
     const close = (val) => {
+      if (closed) return;
+      closed = true;
+      document.removeEventListener('keydown', onKey);
       try { document.body.removeChild(overlay); } catch (_) {}
       if (onClose) onClose();
       resolve(val);
     };
+
+    // Animation "secousse" sur tentative de clic backdrop
+    const shake = () => {
+      card.classList.remove('modal-shake');
+      // Reflow forcé pour réamorcer l'animation
+      void card.offsetWidth;
+      card.classList.add('modal-shake');
+    };
+
     overlay.querySelector('.modal-close').onclick = () => close(null);
-    overlay.addEventListener('click', e => { if (e.target === overlay) close(null); });
+
+    overlay.addEventListener('click', e => {
+      if (e.target !== overlay) return; // clic à l'intérieur de la carte = on ignore
+      if (backdropClose) close(null);
+      else shake();
+    });
+
+    // Échap = équivalent croix
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close(null);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+
     if (onMount) onMount({ body, footer: footerEl, close });
   });
 }

@@ -707,6 +707,23 @@ input, textarea, select {
   max-width: 95vw;
 }
 
+/* Animation "secousse" déclenchée quand l'utilisateur clique sur le fond
+   d'une modale qui n'autorise pas la fermeture par backdrop. Indique
+   visuellement qu'il faut utiliser la croix ou Annuler. */
+@keyframes modal-shake {
+  0%, 100% { transform: translateX(0); }
+  15% { transform: translateX(-8px); }
+  30% { transform: translateX(8px); }
+  45% { transform: translateX(-6px); }
+  60% { transform: translateX(6px); }
+  75% { transform: translateX(-3px); }
+  90% { transform: translateX(3px); }
+}
+
+.modal-card.modal-shake {
+  animation: modal-shake 0.4s ease-in-out;
+}
+
 .modal-header {
   display: flex;
   justify-content: space-between;
