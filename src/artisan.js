@@ -19,8 +19,84 @@ const DEFAULT_KPV = {
   frais_generaux_pct: 0,
   benefice_pct: 0,
   aleas_pct: 0,
-  mode_calcul: 'btp' // 'btp' (officiel cascade), 'additif' ou 'multiplicatif'
+  mode_calcul: 'pct_pv' // 'pct_pv' (recommandé), 'btp', 'additif', 'multiplicatif'
 };
+
+// =========================================================================
+// FRAIS RÉELS — Calcul automatique des % à partir des charges réelles
+// =========================================================================
+//
+// L'artisan saisit son CA annuel (PVHT visé) et la liste de ses charges
+// réelles annuelles (loyer, comptable, EPI, déplacements, etc.) classées
+// en 4 catégories : fg, fc, aleas, benefice. L'app calcule le % de chaque
+// catégorie par rapport au CA, qu'il peut ensuite injecter dans le KPV.
+
+const DEFAULT_FRAIS_REELS = {
+  ca_annuel: 0,
+  benefice_voulu: 0,        // en € OU en % selon benefice_unit
+  benefice_unit: 'eur',     // 'eur' ou 'pct'
+  lignes: []                // [{label, categorie: 'fg'|'fc'|'fo'|'aleas', montant}]
+};
+
+function getFraisReels(db) {
+  try {
+    const r = db.prepare(`SELECT value FROM settings WHERE key = 'frais_reels'`).get();
+    if (r && r.value) return { ...DEFAULT_FRAIS_REELS, ...JSON.parse(r.value) };
+  } catch (_) {}
+  return { ...DEFAULT_FRAIS_REELS };
+}
+
+function setFraisReels(db, payload) {
+  const merged = { ...DEFAULT_FRAIS_REELS, ...payload };
+  if (!Array.isArray(merged.lignes)) merged.lignes = [];
+  db.prepare(`INSERT OR REPLACE INTO settings (key, value) VALUES ('frais_reels', ?)`).run(JSON.stringify(merged));
+  return merged;
+}
+
+// Calcule les pourcentages KPV à partir des frais réels saisis
+function computeFraisReelsToKpv(payload) {
+  const p = { ...DEFAULT_FRAIS_REELS, ...(payload || {}) };
+  const ca = parseFloat(p.ca_annuel) || 0;
+  const lignes = Array.isArray(p.lignes) ? p.lignes : [];
+
+  const totals = { fg: 0, fc: 0, fo: 0, aleas: 0 };
+  lignes.forEach(l => {
+    const cat = l.categorie || 'fg';
+    if (totals[cat] !== undefined) totals[cat] += parseFloat(l.montant) || 0;
+  });
+
+  // Bénéfice : si saisi en €, convertir en % du CA. Sinon utiliser tel quel.
+  let benefMontant = 0, benefPct = 0;
+  if (p.benefice_unit === 'pct') {
+    benefPct = parseFloat(p.benefice_voulu) || 0;
+    benefMontant = ca * benefPct / 100;
+  } else {
+    benefMontant = parseFloat(p.benefice_voulu) || 0;
+    benefPct = ca > 0 ? (benefMontant / ca) * 100 : 0;
+  }
+
+  // % de chaque catégorie par rapport au CA
+  const pct = {
+    frais_generaux_pct: ca > 0 ? Math.round((totals.fg / ca) * 10000) / 100 : 0,
+    frais_chantier_pct: ca > 0 ? Math.round((totals.fc / ca) * 10000) / 100 : 0,
+    frais_operation_pct: ca > 0 ? Math.round((totals.fo / ca) * 10000) / 100 : 0,
+    aleas_pct: ca > 0 ? Math.round((totals.aleas / ca) * 10000) / 100 : 0,
+    benefice_pct: Math.round(benefPct * 100) / 100,
+    mode_calcul: 'pct_pv'
+  };
+
+  // Coef KPV en mode pct_pv = 1 / (1 - sum/100)
+  const sum = pct.frais_generaux_pct + pct.frais_chantier_pct + pct.frais_operation_pct + pct.aleas_pct + pct.benefice_pct;
+  const coef = sum < 99.99 ? 1 / (1 - sum / 100) : 100;
+
+  return {
+    totals_eur: { ...totals, benefice: benefMontant },
+    totals_pct: pct,
+    sum_pct: Math.round(sum * 100) / 100,
+    coef: Math.round(coef * 10000) / 10000,
+    ca_annuel: ca
+  };
+}
 
 function getKpvGlobal(db) {
   try {
@@ -59,11 +135,13 @@ function setKpvForLot(db, lotId, params) {
 }
 
 // Calcule le coefficient KPV final à partir des paramètres
-// 3 modes :
+// 4 modes :
+//   - 'pct_pv' (% du PV)   : tous les frais sont des parts du PV final.
+//                            KPV = 1 / (1 - (fc+fo+fg+b+a)/100). Le plus intuitif
+//                            comptablement : "sur 100 € facturés, X € partent en frais".
 //   - 'btp' (officiel BTP) : cascade DS → DT → CR → PV avec B = b/(1-b) × CR
-//                            (bénéfice exprimé en % du PRIX DE VENTE final)
 //   - 'multiplicatif'      : (1+fc)(1+fg)(1+b) avec B en % du déboursé
-//   - 'additif' (défaut)   : 1 + (somme des %) — simple/rapide mais imprécis
+//   - 'additif'            : 1 + (somme des %) — simple/rapide mais imprécis
 function computeKpvCoef(params) {
   const p = { ...DEFAULT_KPV, ...(params || {}) };
   const fc = parseFloat(p.frais_chantier_pct) || 0;
@@ -72,14 +150,18 @@ function computeKpvCoef(params) {
   const b  = parseFloat(p.benefice_pct) || 0;
   const a  = parseFloat(p.aleas_pct) || 0;
 
+  if (p.mode_calcul === 'pct_pv') {
+    // Tous les % sont des parts du PV final.
+    // DS = PV - FC - FO - FG - B - A = PV × (1 - sum/100)
+    // → KPV = 1 / (1 - sum/100)
+    const sum = Math.min(99.99, Math.max(0, fc + fo + fg + b + a));
+    return 1 / (1 - sum / 100);
+  }
+
   if (p.mode_calcul === 'btp') {
-    // Méthode BTP officielle (cascade) :
-    //   DT = DS × (1 + (fc + aleas) / 100)            — frais chantier + aléas sur DS
-    //   CR = DT × (1 + (fo + fg) / 100)               — frais opération + frais généraux sur DT
-    //   PV = CR / (1 - b/100)                          — bénéfice en % du PV
     const dtCoef = 1 + (fc + a) / 100;
     const crCoef = dtCoef * (1 + (fo + fg) / 100);
-    const bClamp = Math.min(99.99, Math.max(0, b)); // garde-fou : pas de division par 0
+    const bClamp = Math.min(99.99, Math.max(0, b));
     return crCoef / (1 - bClamp / 100);
   }
 
@@ -87,7 +169,6 @@ function computeKpvCoef(params) {
     return (1 + fc / 100) * (1 + fo / 100) * (1 + fg / 100) * (1 + b / 100) * (1 + a / 100);
   }
 
-  // Mode additif (défaut)
   return 1 + (fc + fo + fg + b + a) / 100;
 }
 
@@ -101,6 +182,22 @@ function explainKpv(params, ds = 1000) {
   const b  = parseFloat(p.benefice_pct) || 0;
   const a  = parseFloat(p.aleas_pct) || 0;
 
+  if (p.mode_calcul === 'pct_pv') {
+    // Tous les % sont des parts du PV final
+    const sum = Math.min(99.99, Math.max(0, fc + fo + fg + b + a));
+    const coef = 1 / (1 - sum / 100);
+    const pv = ds * coef;
+    return [
+      { label: 'Déboursé sec',                                 abbr: 'DS', valeur: ds,            formule: `${formatPct(100 - sum)} du PV` },
+      { label: `Frais chantier (${formatPct(fc)} du PV)`,      abbr: 'FC', valeur: pv * fc / 100, formule: `PV × ${formatPct(fc)}` },
+      { label: `Frais opération (${formatPct(fo)} du PV)`,     abbr: 'FO', valeur: pv * fo / 100, formule: `PV × ${formatPct(fo)}` },
+      { label: `Frais généraux (${formatPct(fg)} du PV)`,      abbr: 'FG', valeur: pv * fg / 100, formule: `PV × ${formatPct(fg)}` },
+      { label: `Aléas (${formatPct(a)} du PV)`,                 abbr: 'A',  valeur: pv * a / 100,  formule: `PV × ${formatPct(a)}` },
+      { label: `Bénéfice (${formatPct(b)} du PV)`,              abbr: 'B',  valeur: pv * b / 100,  formule: `PV × ${formatPct(b)}` },
+      { label: 'Prix de vente HT',                             abbr: 'PV', valeur: pv,            formule: `DS / (1 − ${formatPct(sum)}) = DS × ${coef.toFixed(4)}`, highlight: true }
+    ];
+  }
+
   if (p.mode_calcul === 'btp') {
     const fcMontant = ds * (fc + a) / 100;
     const dt = ds + fcMontant;
@@ -110,13 +207,13 @@ function explainKpv(params, ds = 1000) {
     const bMontant = cr * (bClamp / (100 - bClamp));
     const pv = cr + bMontant;
     return [
-      { label: 'Déboursé sec',                abbr: 'DS',           valeur: ds,        formule: 'point de départ' },
-      { label: `Frais chantier (${fc}%) + Aléas (${a}%)`, abbr: 'FC',  valeur: fcMontant, formule: `DS × ${(fc + a).toFixed(1)}%` },
-      { label: 'Déboursés totaux',            abbr: 'DT = DS + FC', valeur: dt,        formule: '' },
-      { label: `Frais opération (${fo}%) + Frais généraux (${fg}%)`, abbr: 'FG', valeur: fgMontant, formule: `DT × ${(fo + fg).toFixed(1)}%` },
-      { label: 'Coût de revient',             abbr: 'CR = DT + FG', valeur: cr,        formule: '' },
-      { label: `Bénéfice (${b}% du PV)`,       abbr: 'B',            valeur: bMontant,  formule: `CR × ${b.toFixed(1)}/(100 − ${b.toFixed(1)})` },
-      { label: 'Prix de vente HT',            abbr: 'PV = CR + B',  valeur: pv,        formule: '', highlight: true }
+      { label: 'Déboursé sec',                                 abbr: 'DS',           valeur: ds,        formule: 'point de départ' },
+      { label: `Frais chantier (${formatPct(fc)}) + Aléas (${formatPct(a)})`, abbr: 'FC',  valeur: fcMontant, formule: `DS × ${formatPct(fc + a)}` },
+      { label: 'Déboursés totaux',                             abbr: 'DT = DS + FC', valeur: dt,        formule: '' },
+      { label: `Frais opération (${formatPct(fo)}) + Frais généraux (${formatPct(fg)})`, abbr: 'FG', valeur: fgMontant, formule: `DT × ${formatPct(fo + fg)}` },
+      { label: 'Coût de revient',                              abbr: 'CR = DT + FG', valeur: cr,        formule: '' },
+      { label: `Bénéfice (${formatPct(b)} du PV)`,              abbr: 'B',            valeur: bMontant,  formule: `CR × ${formatPct(b)}/(100 − ${formatPct(b)})` },
+      { label: 'Prix de vente HT',                             abbr: 'PV = CR + B',  valeur: pv,        formule: '', highlight: true }
     ];
   }
 
@@ -128,6 +225,10 @@ function explainKpv(params, ds = 1000) {
     { label: 'Marge totale',     abbr: 'M',  valeur: pv - ds, formule: `DS × ${((coef - 1) * 100).toFixed(2)}%` },
     { label: 'Prix de vente HT', abbr: 'PV', valeur: pv, formule: `DS × ${coef.toFixed(4)}`, highlight: true }
   ];
+}
+
+function formatPct(v) {
+  return (parseFloat(v) || 0).toFixed(2) + '%';
 }
 
 function listKpvAll(db) {
@@ -427,6 +528,8 @@ module.exports = {
   // KPV
   DEFAULT_KPV, getKpvGlobal, setKpvGlobal, getKpvForLot, setKpvForLot,
   computeKpvCoef, explainKpv, listKpvAll,
+  // Frais réels
+  DEFAULT_FRAIS_REELS, getFraisReels, setFraisReels, computeFraisReelsToKpv,
   // Equipment
   listEquipment, getEquipment, createEquipment, updateEquipment, deleteEquipment,
   computeEquipmentPrice,
