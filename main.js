@@ -486,6 +486,10 @@ ipcMain.handle('artisan:kpv:setForLot', async (_e, { lotId, params }) => {
   try { return { ok: true, data: artisan.setKpvForLot(requireSession(), lotId, params) }; }
   catch (e) { return { ok: false, error: e.message }; }
 });
+ipcMain.handle('artisan:kpv:explain', async (_e, { params, ds }) => {
+  try { return { ok: true, data: artisan.explainKpv(params, ds || 1000) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
 
 // ------------------------------------------------------------------------
 // IPC : module Artisan / Étude — Matériel amorti (PARTAGÉ)

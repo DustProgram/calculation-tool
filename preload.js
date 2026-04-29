@@ -63,7 +63,8 @@ contextBridge.exposeInMainWorld('api', {
       getGlobal: () => ipcRenderer.invoke('artisan:kpv:getGlobal'),
       setGlobal: (p) => ipcRenderer.invoke('artisan:kpv:setGlobal', p),
       listAll: () => ipcRenderer.invoke('artisan:kpv:listAll'),
-      setForLot: (p) => ipcRenderer.invoke('artisan:kpv:setForLot', p)
+      setForLot: (p) => ipcRenderer.invoke('artisan:kpv:setForLot', p),
+      explain: (p) => ipcRenderer.invoke('artisan:kpv:explain', p)
     },
     equipment: {
       list: (q) => ipcRenderer.invoke('artisan:equipment:list', q),
