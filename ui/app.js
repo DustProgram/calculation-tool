@@ -329,6 +329,7 @@ async function renderPage(pageId) {
   if (pageId === 'artisan-suppliers' && window.ArtisanSuppliersPage) return window.ArtisanSuppliersPage.render(content);
   if (pageId === 'artisan-logistic'  && window.ArtisanLogisticPage)  return window.ArtisanLogisticPage.render(content);
   if (pageId === 'artisan-sites'     && window.ArtisanSitesPage)     return window.ArtisanSitesPage.render(content);
+  if (pageId === 'artisan-compta'    && window.ArtisanComptaPage)    return window.ArtisanComptaPage.render(content);
 
   const renderer = PAGES[pageId];
   content.innerHTML = renderer ? renderer() : `<h1>Page inconnue</h1>`;

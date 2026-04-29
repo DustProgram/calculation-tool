@@ -1306,3 +1306,15 @@ label.radio input[type="radio"] {
 .frais-result {
   border: 2px solid var(--primary);
 }
+
+/* ---------- Compta : grilles 2 colonnes ---------- */
+
+.grid-2cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 900px) {
+  .grid-2cols { grid-template-columns: 1fr; }
+}
