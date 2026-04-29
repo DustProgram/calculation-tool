@@ -57,6 +57,43 @@ contextBridge.exposeInMainWorld('api', {
       history: () => ipcRenderer.invoke('etude:reindex:history')
     }
   },
+  // Module Artisan
+  artisan: {
+    kpv: {
+      getGlobal: () => ipcRenderer.invoke('artisan:kpv:getGlobal'),
+      setGlobal: (p) => ipcRenderer.invoke('artisan:kpv:setGlobal', p),
+      listAll: () => ipcRenderer.invoke('artisan:kpv:listAll'),
+      setForLot: (p) => ipcRenderer.invoke('artisan:kpv:setForLot', p)
+    },
+    equipment: {
+      list: (q) => ipcRenderer.invoke('artisan:equipment:list', q),
+      get: (p) => ipcRenderer.invoke('artisan:equipment:get', p),
+      create: (p) => ipcRenderer.invoke('artisan:equipment:create', p),
+      update: (p) => ipcRenderer.invoke('artisan:equipment:update', p),
+      delete: (p) => ipcRenderer.invoke('artisan:equipment:delete', p)
+    },
+    suppliers: {
+      list: () => ipcRenderer.invoke('artisan:suppliers:list'),
+      get: (p) => ipcRenderer.invoke('artisan:suppliers:get', p),
+      create: (p) => ipcRenderer.invoke('artisan:suppliers:create', p),
+      update: (p) => ipcRenderer.invoke('artisan:suppliers:update', p),
+      delete: (p) => ipcRenderer.invoke('artisan:suppliers:delete', p),
+      addPrice: (p) => ipcRenderer.invoke('artisan:suppliers:addPrice', p),
+      updatePrice: (p) => ipcRenderer.invoke('artisan:suppliers:updatePrice', p),
+      deletePrice: (p) => ipcRenderer.invoke('artisan:suppliers:deletePrice', p)
+    },
+    logistic: {
+      get: () => ipcRenderer.invoke('artisan:logistic:get'),
+      set: (p) => ipcRenderer.invoke('artisan:logistic:set', p)
+    },
+    sites: {
+      list: (q) => ipcRenderer.invoke('artisan:sites:list', q),
+      get: (p) => ipcRenderer.invoke('artisan:sites:get', p),
+      create: (p) => ipcRenderer.invoke('artisan:sites:create', p),
+      update: (p) => ipcRenderer.invoke('artisan:sites:update', p),
+      delete: (p) => ipcRenderer.invoke('artisan:sites:delete', p)
+    }
+  },
   // .ndev (stubs Phase 0)
   ndev: {
     exportStub: (payload) => ipcRenderer.invoke('ndev:exportStub', payload),

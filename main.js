@@ -10,6 +10,7 @@ const cryptoMod = require('./src/crypto');
 const dbMod = require('./src/db');
 const ndev = require('./src/ndev');
 const etude = require('./src/etude');
+const artisan = require('./src/artisan');
 const excelMod = require('./src/excel');
 const pdfMod = require('./src/pdf');
 
@@ -462,6 +463,133 @@ ipcMain.handle('etude:reindex:apply', async (_e, payload) => {
 });
 ipcMain.handle('etude:reindex:history', async () => {
   try { return { ok: true, data: etude.getReindexHistory(requireSession()) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+// ------------------------------------------------------------------------
+// IPC : module Artisan — KPV
+// ------------------------------------------------------------------------
+
+ipcMain.handle('artisan:kpv:getGlobal', async () => {
+  try { return { ok: true, data: artisan.getKpvGlobal(requireSession()) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('artisan:kpv:setGlobal', async (_e, payload) => {
+  try { return { ok: true, data: artisan.setKpvGlobal(requireSession(), payload) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('artisan:kpv:listAll', async () => {
+  try { return { ok: true, data: artisan.listKpvAll(requireSession()) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('artisan:kpv:setForLot', async (_e, { lotId, params }) => {
+  try { return { ok: true, data: artisan.setKpvForLot(requireSession(), lotId, params) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+// ------------------------------------------------------------------------
+// IPC : module Artisan / Étude — Matériel amorti (PARTAGÉ)
+// ------------------------------------------------------------------------
+
+ipcMain.handle('artisan:equipment:list', async (_e, q) => {
+  try { return { ok: true, data: artisan.listEquipment(requireSession(), q || {}) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('artisan:equipment:get', async (_e, { id }) => {
+  try { return { ok: true, data: artisan.getEquipment(requireSession(), id) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('artisan:equipment:create', async (_e, payload) => {
+  try { return { ok: true, id: artisan.createEquipment(requireSession(), payload) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('artisan:equipment:update', async (_e, { id, ...payload }) => {
+  try {
+    const prix_unitaire = artisan.updateEquipment(requireSession(), id, payload);
+    return { ok: true, prix_unitaire };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('artisan:equipment:delete', async (_e, { id }) => {
+  try { artisan.deleteEquipment(requireSession(), id); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+// ------------------------------------------------------------------------
+// IPC : module Artisan — Fournisseurs
+// ------------------------------------------------------------------------
+
+ipcMain.handle('artisan:suppliers:list', async () => {
+  try { return { ok: true, data: artisan.listSuppliers(requireSession()) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('artisan:suppliers:get', async (_e, { id }) => {
+  try { return { ok: true, data: artisan.getSupplier(requireSession(), id) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('artisan:suppliers:create', async (_e, payload) => {
+  try { return { ok: true, id: artisan.createSupplier(requireSession(), payload) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('artisan:suppliers:update', async (_e, { id, ...payload }) => {
+  try { artisan.updateSupplier(requireSession(), id, payload); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('artisan:suppliers:delete', async (_e, { id }) => {
+  try { artisan.deleteSupplier(requireSession(), id); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('artisan:suppliers:addPrice', async (_e, { supplierId, ...payload }) => {
+  try { return { ok: true, id: artisan.addSupplierPrice(requireSession(), supplierId, payload) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('artisan:suppliers:updatePrice', async (_e, { id, ...payload }) => {
+  try { artisan.updateSupplierPrice(requireSession(), id, payload); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('artisan:suppliers:deletePrice', async (_e, { id }) => {
+  try { artisan.deleteSupplierPrice(requireSession(), id); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+// ------------------------------------------------------------------------
+// IPC : module Artisan — Logistique / Déplacements
+// ------------------------------------------------------------------------
+
+ipcMain.handle('artisan:logistic:get', async () => {
+  try {
+    const params = artisan.getLogistic(requireSession());
+    return { ok: true, data: params, computed: artisan.computeLogisticCost(params) };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('artisan:logistic:set', async (_e, payload) => {
+  try {
+    const params = artisan.setLogistic(requireSession(), payload);
+    return { ok: true, data: params, computed: artisan.computeLogisticCost(params) };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+// ------------------------------------------------------------------------
+// IPC : module Artisan — Suivi chantier
+// ------------------------------------------------------------------------
+
+ipcMain.handle('artisan:sites:list', async (_e, q) => {
+  try { return { ok: true, data: artisan.listSites(requireSession(), q || {}) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('artisan:sites:get', async (_e, { id }) => {
+  try { return { ok: true, data: artisan.getSite(requireSession(), id) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('artisan:sites:create', async (_e, payload) => {
+  try { return { ok: true, id: artisan.createSite(requireSession(), payload) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('artisan:sites:update', async (_e, { id, ...payload }) => {
+  try { artisan.updateSite(requireSession(), id, payload); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('artisan:sites:delete', async (_e, { id }) => {
+  try { artisan.deleteSite(requireSession(), id); return { ok: true }; }
   catch (e) { return { ok: false, error: e.message }; }
 });
 
