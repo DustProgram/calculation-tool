@@ -1213,3 +1213,36 @@ label.radio input[type="radio"] {
   background: var(--primary);
   transition: width 0.3s;
 }
+
+/* ---------- Tableau breakdown KPV (méthode BTP cascade) ---------- */
+
+.kpv-breakdown {
+  margin-top: 8px;
+}
+
+.kpv-breakdown thead th {
+  background: var(--bg-2);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.kpv-breakdown tbody td {
+  padding: 8px 12px;
+}
+
+.kpv-breakdown tbody tr.bk-highlight {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.kpv-breakdown tbody tr.bk-highlight td {
+  color: var(--on-primary);
+  font-weight: 600;
+}
+
+.kpv-breakdown tbody tr.bk-highlight .muted {
+  color: rgba(255, 255, 255, 0.75);
+}

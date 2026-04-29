@@ -62,11 +62,13 @@
   }
 
   function siteCard(site) {
+    const coutDep = site.cout_dep && site.cout_dep.cout_total_jour;
     return `
       <div class="kanban-card" data-id="${site.id}">
         <div class="kanban-card-title">${escapeHtml(site.nom)}</div>
         ${site.adresse ? `<div class="kanban-card-sub">📍 ${escapeHtml(site.adresse)}</div>` : ''}
         ${site.quote_titre ? `<div class="kanban-card-sub">📄 ${escapeHtml(site.quote_code || '')} ${escapeHtml(site.quote_titre)}</div>` : ''}
+        ${site.distance_km ? `<div class="kanban-card-sub">🚐 ${formatNum(site.distance_km, 1)} km · ${formatNum(coutDep || 0, 2)} €/j</div>` : ''}
         <div class="kanban-card-progress">
           <div class="kanban-card-bar"><div style="width:${Math.min(100, site.avancement_pct || 0)}%"></div></div>
           <span class="small muted">${formatNum(site.avancement_pct || 0, 0)} %</span>
@@ -144,20 +146,68 @@
       title: isEdit ? 'Modifier le chantier' : 'Nouveau chantier',
       large: true,
       content: `
+        <h3>Informations</h3>
         <div class="form-grid">
           <label class="full">Nom *<input id="f-nom" value="${escapeHtml(site && site.nom || '')}"></label>
           <label class="full">Adresse<textarea id="f-adresse" rows="2">${escapeHtml(site && site.adresse || '')}</textarea></label>
           <label>Statut<select id="f-statut">${statutOpts}</select></label>
           <label>Avancement (%)<input id="f-av" type="number" step="5" min="0" max="100" value="${site && site.avancement_pct || 0}"></label>
           <label class="full">Devis lié<select id="f-quote">${quoteOpts}</select></label>
-          <label class="full">Notes<textarea id="f-notes" rows="3">${escapeHtml(site && site.notes || '')}</textarea></label>
         </div>
+
+        <h3 style="margin-top:14px">🚐 Déplacements</h3>
+        <div class="form-grid">
+          <label>Distance siège → chantier (km, aller simple)
+            <input id="f-dist" type="number" step="0.5" value="${site && site.distance_km || 0}">
+          </label>
+          <label>Nb trajets aller-retour / jour
+            <input id="f-nbt" type="number" step="1" min="0" value="${site && site.nb_trajets_jour || 2}">
+            <small class="muted">1 = matin+soir &nbsp;·&nbsp; 2 = + retour midi</small>
+          </label>
+          <label class="full">Nombre de jours estimé du chantier
+            <input id="f-jours" type="number" step="0.5" min="0" value="${site && site.nb_jours_estim || 0}">
+            <small class="muted">Sert à calculer le coût total déplacement du chantier</small>
+          </label>
+        </div>
+
+        <div class="kpv-result-block" id="dep-block">
+          <span>Coût carburant / jour</span>
+          <span class="kpv-coef" id="dep-jour">…</span>
+          <span class="kpv-pct">×</span>
+          <span id="dep-jours-label">… jours</span>
+          <span class="kpv-pct">=</span>
+          <strong id="dep-total" style="font-size:18px">…</strong>
+        </div>
+        <p class="muted small" id="dep-formula" style="margin-top:6px"></p>
+
+        <h3 style="margin-top:14px">Notes</h3>
+        <textarea id="f-notes" rows="3">${escapeHtml(site && site.notes || '')}</textarea>
       `,
       footer: `
         <button class="btn ghost" data-action="cancel">Annuler</button>
         <button class="btn primary" data-action="save">${isEdit ? 'Enregistrer' : 'Créer'}</button>
       `,
       onMount: ({ body, footer, close }) => {
+        const recalc = async () => {
+          // On va chercher les params véhicule à chaque recalc (rarement appelé)
+          const lr = await window.api.artisan.logistic.get();
+          const veh = lr.ok ? lr.data : { prix_carburant_litre: 0, conso_l_100km: 0 };
+          const dist = parseFloat(body.querySelector('#f-dist').value) || 0;
+          const nbT = parseFloat(body.querySelector('#f-nbt').value) || 0;
+          const nbJ = parseFloat(body.querySelector('#f-jours').value) || 0;
+          const km = dist * 2 * nbT;
+          const litres = km * (veh.conso_l_100km || 0) / 100;
+          const coutJour = litres * (veh.prix_carburant_litre || 0);
+          const total = coutJour * nbJ;
+          body.querySelector('#dep-jour').textContent = window.UI.formatEUR(coutJour);
+          body.querySelector('#dep-jours-label').textContent = nbJ + ' jours';
+          body.querySelector('#dep-total').textContent = window.UI.formatEUR(total);
+          body.querySelector('#dep-formula').textContent =
+            `= ${dist} km × 2 × ${nbT} trajets × ${(veh.conso_l_100km || 0)}L/100 × ${(veh.prix_carburant_litre || 0)} €/L  =  ${window.UI.formatEUR(coutJour)}/jour`;
+        };
+        ['#f-dist', '#f-nbt', '#f-jours'].forEach(s => body.querySelector(s).oninput = recalc);
+        recalc();
+
         footer.querySelector('[data-action="cancel"]').onclick = () => close(null);
         footer.querySelector('[data-action="save"]').onclick = async () => {
           const payload = {
@@ -166,7 +216,10 @@
             statut: body.querySelector('#f-statut').value,
             avancement_pct: parseFloat(body.querySelector('#f-av').value) || 0,
             quote_id: body.querySelector('#f-quote').value ? parseInt(body.querySelector('#f-quote').value, 10) : null,
-            notes: body.querySelector('#f-notes').value.trim()
+            notes: body.querySelector('#f-notes').value.trim(),
+            distance_km: parseFloat(body.querySelector('#f-dist').value) || 0,
+            nb_trajets_jour: parseFloat(body.querySelector('#f-nbt').value) || 2,
+            nb_jours_estim: parseFloat(body.querySelector('#f-jours').value) || 0
           };
           if (!payload.nom) return toast('Nom requis', 'danger');
           const r = isEdit
