@@ -14,6 +14,8 @@ const artisan = require('./src/artisan');
 const compta = require('./src/compta');
 const license = require('./src/license');
 const totp = require('./src/totp');
+const identity = require('./src/identity');
+const contacts = require('./src/contacts');
 const excelMod = require('./src/excel');
 const pdfMod = require('./src/pdf');
 
@@ -875,25 +877,120 @@ ipcMain.handle('session:flags', async () => {
 });
 
 // ------------------------------------------------------------------------
-// IPC : .ndev (stub Phase 0, à compléter en Phase 3)
+// IPC : Identité X25519 (Phase 3.5)
 // ------------------------------------------------------------------------
 
-ipcMain.handle('ndev:exportStub', async (_evt, payload) => {
-  if (!session) return { ok: false, error: 'Non connecté.' };
-  const result = await dialog.showSaveDialog(mainWindow, {
-    title: 'Exporter le devis',
-    defaultPath: `devis-${Date.now()}.ndev`,
-    filters: [{ name: 'Fichier de devis', extensions: ['ndev'] }]
-  });
-  if (result.canceled) return { ok: false, error: 'Annulé.' };
-  const data = ndev.serialize(payload || { stub: true, generatedAt: Date.now() });
-  fs.writeFileSync(result.filePath, data);
-  return { ok: true, path: result.filePath };
+ipcMain.handle('identity:get', async () => {
+  try {
+    if (!session) throw new Error('Non connecté');
+    const db = requireSession();
+    const id = identity.getOrCreateIdentity(db, session.dek, session.displayName || session.login);
+    return {
+      ok: true,
+      pub_b64: id.pub.toString('base64'),
+      pub_shareable: identity.pubToShareable(id.pub),
+      label: id.label
+    };
+  } catch (e) { return { ok: false, error: e.message }; }
 });
 
-ipcMain.handle('ndev:openInbox', async () => {
-  shell.openPath(getInboxDir());
-  return { ok: true };
+ipcMain.handle('identity:setLabel', async (_e, { label }) => {
+  try { identity.setLabel(requireSession(), label); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('identity:regenerate', async (_e, { label }) => {
+  try {
+    if (!session) throw new Error('Non connecté');
+    const db = requireSession();
+    const r = identity.regenerateIdentity(db, session.dek, label || '');
+    return { ok: true, pub_b64: r.pub.toString('base64'), pub_shareable: identity.pubToShareable(r.pub) };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('identity:qrcode', async (_e, { text }) => {
+  try {
+    const QRCode = require('qrcode');
+    const dataUrl = await QRCode.toDataURL(text, { errorCorrectionLevel: 'M', scale: 6, margin: 2 });
+    return { ok: true, dataUrl };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+// ------------------------------------------------------------------------
+// IPC : Carnet d'adresses (contacts)
+// ------------------------------------------------------------------------
+
+ipcMain.handle('contacts:list', async () => {
+  try { return { ok: true, data: contacts.listContacts(requireSession()) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('contacts:create', async (_e, payload) => {
+  try { return { ok: true, id: contacts.createContact(requireSession(), payload) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('contacts:update', async (_e, { id, ...payload }) => {
+  try { contacts.updateContact(requireSession(), id, payload); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('contacts:delete', async (_e, { id }) => {
+  try { contacts.deleteContact(requireSession(), id); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+// ------------------------------------------------------------------------
+// IPC : .ndev (export et import de devis chiffré)
+// ------------------------------------------------------------------------
+
+ipcMain.handle('ndev:export', async (_e, { quoteId, contactIds, subject }) => {
+  try {
+    if (!session) throw new Error('Non connecté');
+    const db = requireSession();
+    const allContacts = contacts.listContacts(db);
+    const targets = (contactIds || []).map(cid => allContacts.find(c => c.id === cid)).filter(Boolean);
+    if (!targets.length) throw new Error('Aucun destinataire sélectionné');
+    const files = [];
+    for (const c of targets) {
+      const file = ndev.exportQuoteToNdev(db, session.dek, quoteId, c.pub_key, { subject });
+      const fname = `${(c.label || 'artisan').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${quoteId}.ndev`;
+      files.push({ contact_id: c.id, contact_label: c.label, contact_email: c.email, file_name: fname, content: JSON.stringify(file, null, 2) });
+      ndev.logSent(db, quoteId, c.id, fname);
+    }
+    return { ok: true, files };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('ndev:import', async (_e, { content }) => {
+  try {
+    if (!session) throw new Error('Non connecté');
+    const db = requireSession();
+    const r = ndev.importNdev(db, session.dek, content);
+    return { ok: true, data: r };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('ndev:received:list', async () => {
+  try { return { ok: true, data: ndev.listReceivedQuotes(requireSession()) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('ndev:received:get', async (_e, { id }) => {
+  try { return { ok: true, data: ndev.getReceivedQuote(requireSession(), id) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('ndev:received:setStatut', async (_e, { id, statut, notes }) => {
+  try { ndev.setReceivedQuoteStatut(requireSession(), id, statut, notes); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('ndev:received:delete', async (_e, { id }) => {
+  try { ndev.deleteReceivedQuote(requireSession(), id); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('ndev:sentLog', async (_e, { quoteId } = {}) => {
+  try { return { ok: true, data: ndev.listSentLog(requireSession(), { quoteId }) }; }
+  catch (e) { return { ok: false, error: e.message }; }
 });
 
 // ------------------------------------------------------------------------

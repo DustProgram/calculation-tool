@@ -147,7 +147,28 @@ contextBridge.exposeInMainWorld('api', {
     },
     session: {
       flags: () => ipcRenderer.invoke('session:flags')
+    },
+    identity: {
+      get: () => ipcRenderer.invoke('identity:get'),
+      setLabel: (p) => ipcRenderer.invoke('identity:setLabel', p),
+      regenerate: (p) => ipcRenderer.invoke('identity:regenerate', p),
+      qrcode: (p) => ipcRenderer.invoke('identity:qrcode', p)
     }
+  },
+  contacts: {
+    list: () => ipcRenderer.invoke('contacts:list'),
+    create: (p) => ipcRenderer.invoke('contacts:create', p),
+    update: (p) => ipcRenderer.invoke('contacts:update', p),
+    delete: (p) => ipcRenderer.invoke('contacts:delete', p)
+  },
+  ndev: {
+    export: (p) => ipcRenderer.invoke('ndev:export', p),
+    import: (p) => ipcRenderer.invoke('ndev:import', p),
+    receivedList: () => ipcRenderer.invoke('ndev:received:list'),
+    receivedGet: (p) => ipcRenderer.invoke('ndev:received:get', p),
+    receivedSetStatut: (p) => ipcRenderer.invoke('ndev:received:setStatut', p),
+    receivedDelete: (p) => ipcRenderer.invoke('ndev:received:delete', p),
+    sentLog: (p) => ipcRenderer.invoke('ndev:sentLog', p)
   },
   // .ndev (stubs Phase 0)
   ndev: {
