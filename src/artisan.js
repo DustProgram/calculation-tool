@@ -19,7 +19,7 @@ const DEFAULT_KPV = {
   frais_generaux_pct: 0,
   benefice_pct: 0,
   aleas_pct: 0,
-  mode_calcul: 'additif' // 'additif' ou 'multiplicatif'
+  mode_calcul: 'btp' // 'btp' (officiel cascade), 'additif' ou 'multiplicatif'
 };
 
 function getKpvGlobal(db) {
@@ -59,6 +59,11 @@ function setKpvForLot(db, lotId, params) {
 }
 
 // Calcule le coefficient KPV final à partir des paramètres
+// 3 modes :
+//   - 'btp' (officiel BTP) : cascade DS → DT → CR → PV avec B = b/(1-b) × CR
+//                            (bénéfice exprimé en % du PRIX DE VENTE final)
+//   - 'multiplicatif'      : (1+fc)(1+fg)(1+b) avec B en % du déboursé
+//   - 'additif' (défaut)   : 1 + (somme des %) — simple/rapide mais imprécis
 function computeKpvCoef(params) {
   const p = { ...DEFAULT_KPV, ...(params || {}) };
   const fc = parseFloat(p.frais_chantier_pct) || 0;
@@ -66,11 +71,63 @@ function computeKpvCoef(params) {
   const fg = parseFloat(p.frais_generaux_pct) || 0;
   const b  = parseFloat(p.benefice_pct) || 0;
   const a  = parseFloat(p.aleas_pct) || 0;
+
+  if (p.mode_calcul === 'btp') {
+    // Méthode BTP officielle (cascade) :
+    //   DT = DS × (1 + (fc + aleas) / 100)            — frais chantier + aléas sur DS
+    //   CR = DT × (1 + (fo + fg) / 100)               — frais opération + frais généraux sur DT
+    //   PV = CR / (1 - b/100)                          — bénéfice en % du PV
+    const dtCoef = 1 + (fc + a) / 100;
+    const crCoef = dtCoef * (1 + (fo + fg) / 100);
+    const bClamp = Math.min(99.99, Math.max(0, b)); // garde-fou : pas de division par 0
+    return crCoef / (1 - bClamp / 100);
+  }
+
   if (p.mode_calcul === 'multiplicatif') {
     return (1 + fc / 100) * (1 + fo / 100) * (1 + fg / 100) * (1 + b / 100) * (1 + a / 100);
   }
-  // Mode additif (par défaut)
+
+  // Mode additif (défaut)
   return 1 + (fc + fo + fg + b + a) / 100;
+}
+
+// Breakdown détaillé du calcul KPV pour affichage (style tableau BTP standard).
+// Retourne un tableau de lignes {label, abbr, valeur, formule} pour un déboursé sec donné.
+function explainKpv(params, ds = 1000) {
+  const p = { ...DEFAULT_KPV, ...(params || {}) };
+  const fc = parseFloat(p.frais_chantier_pct) || 0;
+  const fo = parseFloat(p.frais_operation_pct) || 0;
+  const fg = parseFloat(p.frais_generaux_pct) || 0;
+  const b  = parseFloat(p.benefice_pct) || 0;
+  const a  = parseFloat(p.aleas_pct) || 0;
+
+  if (p.mode_calcul === 'btp') {
+    const fcMontant = ds * (fc + a) / 100;
+    const dt = ds + fcMontant;
+    const fgMontant = dt * (fo + fg) / 100;
+    const cr = dt + fgMontant;
+    const bClamp = Math.min(99.99, Math.max(0, b));
+    const bMontant = cr * (bClamp / (100 - bClamp));
+    const pv = cr + bMontant;
+    return [
+      { label: 'Déboursé sec',                abbr: 'DS',           valeur: ds,        formule: 'point de départ' },
+      { label: `Frais chantier (${fc}%) + Aléas (${a}%)`, abbr: 'FC',  valeur: fcMontant, formule: `DS × ${(fc + a).toFixed(1)}%` },
+      { label: 'Déboursés totaux',            abbr: 'DT = DS + FC', valeur: dt,        formule: '' },
+      { label: `Frais opération (${fo}%) + Frais généraux (${fg}%)`, abbr: 'FG', valeur: fgMontant, formule: `DT × ${(fo + fg).toFixed(1)}%` },
+      { label: 'Coût de revient',             abbr: 'CR = DT + FG', valeur: cr,        formule: '' },
+      { label: `Bénéfice (${b}% du PV)`,       abbr: 'B',            valeur: bMontant,  formule: `CR × ${b.toFixed(1)}/(100 − ${b.toFixed(1)})` },
+      { label: 'Prix de vente HT',            abbr: 'PV = CR + B',  valeur: pv,        formule: '', highlight: true }
+    ];
+  }
+
+  // Modes additif et multiplicatif : breakdown plus simple
+  const coef = computeKpvCoef(p);
+  const pv = ds * coef;
+  return [
+    { label: 'Déboursé sec',     abbr: 'DS', valeur: ds, formule: 'point de départ' },
+    { label: 'Marge totale',     abbr: 'M',  valeur: pv - ds, formule: `DS × ${((coef - 1) * 100).toFixed(2)}%` },
+    { label: 'Prix de vente HT', abbr: 'PV', valeur: pv, formule: `DS × ${coef.toFixed(4)}`, highlight: true }
+  ];
 }
 
 function listKpvAll(db) {
@@ -226,9 +283,10 @@ function deleteSupplierPrice(db, id) {
 const DEFAULT_LOGISTIC = {
   prix_carburant_litre: 1.85,
   conso_l_100km: 8,
+  // Conservés pour compatibilité (utilisés comme valeurs par défaut quand un chantier
+  // n'a pas encore renseigné distance/nb_trajets)
   distance_aller_km: 20,
-  nb_trajets_jour: 2,
-  cout_horaire_chauffeur: 0
+  nb_trajets_jour: 2
 };
 
 function getLogistic(db) {
@@ -245,14 +303,26 @@ function setLogistic(db, params) {
   return merged;
 }
 
-// Coût quotidien de déplacement = (distance × 2) × nb_trajets × (conso/100) × prix_litre
+// Coût quotidien de déplacement GLOBAL (utilise les défauts)
 function computeLogisticCost(params) {
   const p = { ...DEFAULT_LOGISTIC, ...(params || {}) };
-  const km_par_jour = parseFloat(p.distance_aller_km) * 2 * parseFloat(p.nb_trajets_jour);
-  const litres = km_par_jour * parseFloat(p.conso_l_100km) / 100;
-  const carburant = litres * parseFloat(p.prix_carburant_litre);
+  return computeSiteLogisticCost(
+    parseFloat(p.distance_aller_km) || 0,
+    parseFloat(p.nb_trajets_jour) || 0,
+    p
+  );
+}
+
+// Coût quotidien de déplacement POUR UN CHANTIER donné (distance et trajets propres)
+function computeSiteLogisticCost(distanceKm, nbTrajets, vehiculeParams) {
+  const p = { ...DEFAULT_LOGISTIC, ...(vehiculeParams || {}) };
+  const dist = parseFloat(distanceKm) || 0;
+  const nb = parseFloat(nbTrajets) || 0;
+  const km_par_jour = dist * 2 * nb; // aller-retour × nb trajets
+  const litres = km_par_jour * (parseFloat(p.conso_l_100km) || 0) / 100;
+  const carburant = litres * (parseFloat(p.prix_carburant_litre) || 0);
   return {
-    km_par_jour,
+    km_par_jour: Math.round(km_par_jour * 10) / 10,
     litres_par_jour: Math.round(litres * 100) / 100,
     cout_carburant_jour: Math.round(carburant * 100) / 100,
     cout_total_jour: Math.round(carburant * 100) / 100
@@ -275,38 +345,68 @@ function listSites(db, { statut } = {}) {
   const params = [];
   if (statut) { sql += ' AND s.statut = ?'; params.push(statut); }
   sql += ' ORDER BY s.updated_at DESC';
-  return db.prepare(sql).all(...params);
+  const rows = db.prepare(sql).all(...params);
+  // Enrichit chaque chantier avec son coût de déplacement calculé
+  const veh = getLogistic(db);
+  rows.forEach(s => {
+    s.cout_dep = computeSiteLogisticCost(s.distance_km || 0, s.nb_trajets_jour || 2, veh);
+    s.cout_dep_total = Math.round(s.cout_dep.cout_total_jour * (parseFloat(s.nb_jours_estim) || 0) * 100) / 100;
+  });
+  return rows;
 }
 
 function getSite(db, id) {
-  return db.prepare(`
+  const s = db.prepare(`
     SELECT s.*, q.titre AS quote_titre, q.code AS quote_code
     FROM sites s LEFT JOIN quotes q ON q.id = s.quote_id
     WHERE s.id = ?
   `).get(id);
+  if (s) {
+    const veh = getLogistic(db);
+    s.cout_dep = computeSiteLogisticCost(s.distance_km || 0, s.nb_trajets_jour || 2, veh);
+    s.cout_dep_total = Math.round(s.cout_dep.cout_total_jour * (parseFloat(s.nb_jours_estim) || 0) * 100) / 100;
+  }
+  return s;
 }
 
-function createSite(db, { nom, adresse, quote_id, statut, date_debut, date_fin_prev, notes }) {
+function createSite(db, payload) {
+  const {
+    nom, adresse, quote_id, statut, date_debut, date_fin_prev, notes,
+    distance_km, nb_trajets_jour, nb_jours_estim
+  } = payload;
   const now = Date.now();
   return db.prepare(`
-    INSERT INTO sites (nom, adresse, quote_id, statut, avancement_pct, date_debut, date_fin_prev, notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?)
+    INSERT INTO sites (nom, adresse, quote_id, statut, avancement_pct, date_debut, date_fin_prev,
+                       notes, distance_km, nb_trajets_jour, nb_jours_estim, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     nom, adresse || null, quote_id || null,
     statut || 'a_demarrer',
     date_debut || null, date_fin_prev || null,
-    notes || null, now, now
+    notes || null,
+    parseFloat(distance_km) || 0,
+    parseFloat(nb_trajets_jour) || 2,
+    parseFloat(nb_jours_estim) || 0,
+    now, now
   ).lastInsertRowid;
 }
 
 function updateSite(db, id, payload) {
   const fields = [], params = [];
-  ['nom', 'adresse', 'quote_id', 'statut', 'avancement_pct', 'date_debut', 'date_fin_prev', 'notes'].forEach(k => {
+  const allowed = ['nom', 'adresse', 'quote_id', 'statut', 'avancement_pct', 'date_debut',
+                   'date_fin_prev', 'notes', 'distance_km', 'nb_trajets_jour', 'nb_jours_estim'];
+  allowed.forEach(k => {
     if (payload[k] !== undefined) {
       fields.push(`${k} = ?`);
-      params.push(k === 'avancement_pct' ? (parseFloat(payload[k]) || 0)
-                : ['quote_id', 'date_debut', 'date_fin_prev'].includes(k) ? (payload[k] || null)
-                : (payload[k] || (typeof payload[k] === 'string' ? null : payload[k])));
+      let val = payload[k];
+      if (['avancement_pct', 'distance_km', 'nb_trajets_jour', 'nb_jours_estim'].includes(k)) {
+        val = parseFloat(val) || 0;
+      } else if (['quote_id', 'date_debut', 'date_fin_prev'].includes(k)) {
+        val = val || null;
+      } else if (typeof val === 'string') {
+        val = val.trim() || null;
+      }
+      params.push(val);
     }
   });
   if (!fields.length) return;
@@ -326,7 +426,7 @@ function deleteSite(db, id) {
 module.exports = {
   // KPV
   DEFAULT_KPV, getKpvGlobal, setKpvGlobal, getKpvForLot, setKpvForLot,
-  computeKpvCoef, listKpvAll,
+  computeKpvCoef, explainKpv, listKpvAll,
   // Equipment
   listEquipment, getEquipment, createEquipment, updateEquipment, deleteEquipment,
   computeEquipmentPrice,
@@ -334,7 +434,7 @@ module.exports = {
   listSuppliers, getSupplier, createSupplier, updateSupplier, deleteSupplier,
   addSupplierPrice, updateSupplierPrice, deleteSupplierPrice,
   // Logistic
-  DEFAULT_LOGISTIC, getLogistic, setLogistic, computeLogisticCost,
+  DEFAULT_LOGISTIC, getLogistic, setLogistic, computeLogisticCost, computeSiteLogisticCost,
   // Sites
   SITE_STATUTS, listSites, getSite, createSite, updateSite, deleteSite
 };

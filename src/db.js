@@ -219,7 +219,11 @@ function openUserDb(userId, dek) {
     `ALTER TABLE supplier_prices ADD COLUMN notes TEXT`,
     `ALTER TABLE sites ADD COLUMN date_debut INTEGER`,
     `ALTER TABLE sites ADD COLUMN date_fin_prev INTEGER`,
-    `ALTER TABLE sites ADD COLUMN notes TEXT`
+    `ALTER TABLE sites ADD COLUMN notes TEXT`,
+    // Phase 2.1 : distance et nb trajets par chantier
+    `ALTER TABLE sites ADD COLUMN distance_km REAL DEFAULT 0`,
+    `ALTER TABLE sites ADD COLUMN nb_trajets_jour REAL DEFAULT 2`,
+    `ALTER TABLE sites ADD COLUMN nb_jours_estim REAL DEFAULT 0`
   ];
   migrations.forEach(sql => {
     try { wrap.exec(sql); } catch (_) { /* colonne déjà présente */ }
