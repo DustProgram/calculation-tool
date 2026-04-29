@@ -461,20 +461,63 @@ const SCHEMA_USER = `
   CREATE INDEX IF NOT EXISTS idx_lic_id ON user_licenses(license_id);
 
   -- ============================================================
-  -- SÉCURITÉ (Phase 3) — Secrets utilisateur (TOTP, mode éditeur)
+  -- SÉCURITÉ (Phase 3) — Secrets utilisateur (TOTP, mode éditeur, identité X25519)
   -- ============================================================
-  -- Table à 1 ligne (singleton) : id = 1
   CREATE TABLE IF NOT EXISTS user_secrets (
     id INTEGER PRIMARY KEY DEFAULT 1,
-    totp_secret BLOB,                  -- Secret TOTP chiffré par DEK
-    totp_enabled INTEGER DEFAULT 0,    -- 0=désactivée, 1=activée
-    totp_recovery_hashes TEXT,         -- JSON array de hashes SHA-256
-    master_private_key BLOB,           -- Clé privée Ed25519 (mode éditeur), chiffrée par DEK
+    totp_secret BLOB,
+    totp_enabled INTEGER DEFAULT 0,
+    totp_recovery_hashes TEXT,
+    master_private_key BLOB,
+    x25519_private BLOB,        -- clé privée X25519 chiffrée par DEK (échange .ndev)
+    x25519_public BLOB,         -- clé publique X25519 (en clair, partageable)
+    x25519_label TEXT,          -- libellé identité (ex: "Roland — PROMORAME")
     CHECK (id = 1)
   );
-
-  -- Initialise la ligne unique au premier accès
   INSERT OR IGNORE INTO user_secrets (id) VALUES (1);
+
+  -- ============================================================
+  -- COMMUNICATION ÉTUDE → ARTISAN (Phase 3.5)
+  -- ============================================================
+
+  -- Carnet d'adresses des artisans (côté BE/Étude)
+  CREATE TABLE IF NOT EXISTS contacts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    label TEXT NOT NULL,            -- "Jean Dupont — SARL Plomberie Express"
+    metier TEXT,                     -- "Plomberie", "Électricité", etc.
+    email TEXT,
+    telephone TEXT,
+    pub_key TEXT NOT NULL,           -- Clé publique X25519 (base64)
+    notes TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  -- Devis reçus (côté Artisan, après import d'un .ndev)
+  CREATE TABLE IF NOT EXISTS received_quotes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sender_label TEXT,                -- libellé du BE émetteur
+    sender_pub TEXT,                  -- clé publique de l'émetteur (pour identifier)
+    subject TEXT,                     -- ex: "DEV-2026-001 — Villa Dupont"
+    received_at INTEGER NOT NULL,
+    issued_at INTEGER,                -- date d'envoi par le BE
+    payload TEXT NOT NULL,            -- JSON déchiffré (devis complet)
+    statut TEXT DEFAULT 'nouveau',    -- 'nouveau', 'lu', 'accepte', 'refuse'
+    notes TEXT
+  );
+
+  -- Historique des envois (côté Étude)
+  CREATE TABLE IF NOT EXISTS sent_quotes_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    quote_id INTEGER,
+    contact_id INTEGER,
+    sent_at INTEGER NOT NULL,
+    file_name TEXT,
+    FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE SET NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_recv_received_at ON received_quotes(received_at);
+  CREATE INDEX IF NOT EXISTS idx_sent_quote_id ON sent_quotes_log(quote_id);
 `;
 
 module.exports = {
