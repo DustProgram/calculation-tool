@@ -20,8 +20,7 @@
     "sql.js": "^1.11.0",
     "bip39": "^3.1.0",
     "electron-updater": "^6.3.9",
-    "xlsx": "^0.18.5",
-    "pdfmake": "^0.2.10"
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "electron": "^32.0.0",

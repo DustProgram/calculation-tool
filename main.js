@@ -431,15 +431,21 @@ ipcMain.handle('etude:quotes:exportPdf', async (_e, { quoteId, versionNumero }) 
     if (!q) throw new Error('Devis introuvable.');
     const v = q.versions.find(vv => vv.numero === versionNumero) || q.versions[q.versions.length - 1];
     if (!v) throw new Error('Version introuvable.');
+    const lignes = (v.snapshot && v.snapshot.lignes) || [];
+    const settings = { kpv_mode: q.kpv_mode, kpv_pct: q.kpv_pct, tva_pct: q.tva_pct };
+    const totals = etude.computeQuoteTotals(lignes, settings);
     const r = await dialog.showSaveDialog(mainWindow, {
       title: 'Exporter le devis en PDF',
       defaultPath: `devis-${q.code || q.id}-v${v.numero}.pdf`,
       filters: [{ name: 'PDF', extensions: ['pdf'] }]
     });
     if (r.canceled) return { ok: false, canceled: true };
-    await pdfMod.generateQuotePdf(q, v, (v.snapshot && v.snapshot.lignes) || [], r.filePath);
+    await pdfMod.generateQuotePdf(q, v, lignes, totals, r.filePath);
     return { ok: true, path: r.filePath };
-  } catch (e) { return { ok: false, error: e.message }; }
+  } catch (e) {
+    console.error('[exportPdf] Erreur :', e);
+    return { ok: false, error: e.message || String(e) };
+  }
 });
 
 // ------------------------------------------------------------------------
