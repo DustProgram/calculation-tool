@@ -113,6 +113,16 @@ async function doLogin() {
   const res = await window.api.auth.login(payload);
   if (!res.ok) return errEl.textContent = res.error;
   currentUser = res.user;
+  // Phase 3 : challenge TOTP si activée pour cet utilisateur
+  if (window.SecurityChallenge) {
+    const ok = await window.SecurityChallenge.requireTotp('login');
+    if (!ok) {
+      // Refus → on déconnecte
+      await window.api.auth.logout();
+      currentUser = null;
+      return errEl.textContent = 'Authentification 2FA refusée.';
+    }
+  }
   goToProfilSelector();
 }
 
@@ -319,6 +329,24 @@ function placeholder(title, phase, description) {
 
 async function renderPage(pageId) {
   const content = $('#content');
+
+  // ---- Phase 3 : verrouillage licence ----
+  // Pages Étude : licence "etude" requise
+  if (pageId.startsWith('etude-') && pageId !== 'etude-home') {
+    const lr = await window.api.security.license.status();
+    if (lr.ok && !lr.hasEtude) return showLockedPage(content, 'Étude de prix', 'etude');
+  }
+  // Page Compta : licence "compta" requise + 2FA
+  if (pageId === 'artisan-compta') {
+    const lr = await window.api.security.license.status();
+    if (lr.ok && !lr.hasCompta) return showLockedPage(content, 'Comptabilité', 'compta');
+    // Challenge 2FA pour Compta (si activée)
+    if (window.SecurityChallenge) {
+      const ok = await window.SecurityChallenge.requireTotp('compta');
+      if (!ok) return content.innerHTML = '<div class="loader">🔒 Accès refusé — utilise le menu pour aller ailleurs</div>';
+    }
+  }
+
   // Pages avancées : on délègue
   if (pageId === 'etude-prices'    && window.EtudePricesPage)    return window.EtudePricesPage.render(content);
   if (pageId === 'etude-compos'    && window.EtudeComposPage)    return window.EtudeComposPage.render(content);
@@ -330,6 +358,7 @@ async function renderPage(pageId) {
   if (pageId === 'artisan-logistic'  && window.ArtisanLogisticPage)  return window.ArtisanLogisticPage.render(content);
   if (pageId === 'artisan-sites'     && window.ArtisanSitesPage)     return window.ArtisanSitesPage.render(content);
   if (pageId === 'artisan-compta'    && window.ArtisanComptaPage)    return window.ArtisanComptaPage.render(content);
+  if (pageId === 'account'           && window.AccountPage)          return window.AccountPage.render(content);
 
   const renderer = PAGES[pageId];
   content.innerHTML = renderer ? renderer() : `<h1>Page inconnue</h1>`;
@@ -373,6 +402,37 @@ async function renderPage(pageId) {
     } catch (_) {}
   }
 }
+
+// =========================================================================
+// PHASE 3 — Page verrouillée (licence manquante)
+// =========================================================================
+
+function showLockedPage(content, moduleName, moduleKey) {
+  content.innerHTML = `
+    <div class="locked-page">
+      <div style="font-size:64px;text-align:center">🔒</div>
+      <h1 style="text-align:center">Module « ${moduleName} » verrouillé</h1>
+      <p style="text-align:center;font-size:15px" class="muted">
+        Pour accéder à ce module, tu dois importer un fichier de licence <code>.nelic</code> qui t'a été délivré par l'éditeur.
+      </p>
+      <div style="text-align:center;margin-top:24px">
+        <button class="btn primary big" id="btn-go-account">📥 Aller à la page Compte & Sécurité</button>
+      </div>
+      <div style="text-align:center;margin-top:18px">
+        <p class="muted small">Tu n'as pas encore de licence ? Contacte l'éditeur de l'application avec ton identifiant.</p>
+      </div>
+    </div>
+  `;
+  $('#btn-go-account').onclick = () => renderPage('account');
+}
+
+// Hook appelé par account.js quand une licence est importée/supprimée
+window.App = window.App || {};
+window.App.onLicenseChanged = () => {
+  // Pas besoin de tout recharger : juste rafraîchir la sidebar pour que les éventuels indicateurs visuels se mettent à jour
+  // Si on est sur une page verrouillée, on retourne sur la home
+  // Pour simplifier, on ne fait rien ici — la page sera revérifiée au prochain clic
+};
 
 // =========================================================================
 // BOOT
