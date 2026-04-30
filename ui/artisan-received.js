@@ -38,15 +38,19 @@
     return `<span class="badge" style="background:rgba(91,141,239,0.15);color:#5b8def;margin-left:6px">v${n}</span>`;
   }
 
+  // Clé stable d'une ligne, partagée avec diffVersions et les annotations.
+  function lineKey(l) {
+    return l.priceId ? 'p:' + l.priceId
+         : l.compositionId ? 'c:' + l.compositionId
+         : 'l:' + (l.designation || '').toLowerCase();
+  }
+
   // Diff entre 2 versions (même logique que etude.diffVersions côté BE).
   function diffVersions(vA, vB) {
     const linesA = getLignes(vA);
     const linesB = getLignes(vB);
-    const keyOf = (l) => l.priceId ? 'p:' + l.priceId
-                       : l.compositionId ? 'c:' + l.compositionId
-                       : 'l:' + (l.designation || '').toLowerCase();
-    const mapA = {}; linesA.forEach(l => mapA[keyOf(l)] = l);
-    const mapB = {}; linesB.forEach(l => mapB[keyOf(l)] = l);
+    const mapA = {}; linesA.forEach(l => mapA[lineKey(l)] = l);
+    const mapB = {}; linesB.forEach(l => mapB[lineKey(l)] = l);
     const added = [], removed = [], modified = [];
     Object.keys(mapB).forEach(k => {
       if (!mapA[k]) added.push(mapB[k]);
@@ -59,6 +63,52 @@
     });
     Object.keys(mapA).forEach(k => { if (!mapB[k]) removed.push(mapA[k]); });
     return { added, removed, modified };
+  }
+
+  // Brouillon de réponse vide (utilisé si pas encore de response_data en DB).
+  function emptyDraft() {
+    return {
+      version_target: null,
+      remarques_lignes: {},
+      lignes_ajoutees: [],
+      remarque_globale: '',
+      attachments: []
+    };
+  }
+
+  // Total cumulé des PJ (octets bruts).
+  function attachmentsTotalBytes(atts) {
+    return (atts || []).reduce((s, a) => s + (parseInt(a.size, 10) || 0), 0);
+  }
+
+  function formatBytes(n) {
+    if (n < 1024) return n + ' o';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' Ko';
+    return (n / 1024 / 1024).toFixed(1) + ' Mo';
+  }
+
+  // Lit un File en base64 (sans le préfixe data:).
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const url = e.target.result || '';
+        const i = url.indexOf(',');
+        resolve(i >= 0 ? url.slice(i + 1) : url);
+      };
+      reader.onerror = () => reject(new Error('Lecture du fichier impossible'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Télécharge un fichier généré (utilise un blob URL temporaire).
+  function downloadFile(name, content, mime) {
+    const blob = new Blob([content], { type: mime || 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   function render() {
@@ -165,10 +215,12 @@
   }
 
   // Construit le bloc « détail des prix + totaux + comparaison » pour une version donnée.
-  function renderVersionDetail(payload, viewIdx, compareIdx) {
+  // Si `draft` est fourni, ajoute une zone d'annotation par ligne (alimentée par draft.remarques_lignes).
+  function renderVersionDetail(payload, viewIdx, compareIdx, draft) {
     const versions = getVersions(payload);
     const v = versions[viewIdx];
     const lignes = getLignes(v);
+    const remarques = (draft && draft.remarques_lignes) || {};
 
     const linesHtml = lignes.length ? `
       <table class="data-table">
@@ -178,16 +230,21 @@
           <th class="right" style="width:80px">Unité</th>
           <th class="right" style="width:90px">P.U. HT</th>
           <th class="right" style="width:100px">Total HT</th>
+          ${draft ? '<th style="width:200px">📝 Remarque (artisan)</th>' : ''}
         </tr></thead>
-        <tbody>${lignes.map(l => `
+        <tbody>${lignes.map(l => {
+          const k = lineKey(l);
+          const remVal = escapeHtml(remarques[k] || '');
+          return `
           <tr>
             <td>${escapeHtml(l.designation || '—')}</td>
             <td class="right">${formatNum(l.quantite || 0, 2)}</td>
             <td class="right small">${escapeHtml(l.unite || '')}</td>
             <td class="right">${formatEUR(l.prixUnitaire || 0)}</td>
             <td class="right"><strong>${formatEUR((l.quantite || 0) * (l.prixUnitaire || 0))}</strong></td>
-          </tr>
-        `).join('')}</tbody>
+            ${draft ? `<td><textarea class="line-remark" data-line-key="${escapeHtml(k)}" rows="1" placeholder="Remarque sur cette ligne…" style="width:100%;min-height:28px;font-size:12px">${remVal}</textarea></td>` : ''}
+          </tr>`;
+        }).join('')}</tbody>
       </table>
     ` : '<p class="muted">Aucune ligne dans cette version</p>';
 
@@ -236,6 +293,62 @@
     `;
   }
 
+  // Rend la section « Réponse au BE » : lignes ajoutées + remarque globale + PJ.
+  // L'état est dans `draft` ; les inputs mettent à jour draft on-blur via openViewModal.
+  function renderResponseSection(draft, maxBytes) {
+    const linesHtml = (draft.lignes_ajoutees || []).map((l, i) => `
+      <tr data-add-idx="${i}">
+        <td><input class="add-desig" data-i="${i}" value="${escapeHtml(l.designation || '')}" placeholder="Prestation à chiffrer"></td>
+        <td><input class="add-qte"   data-i="${i}" type="number" step="0.01" value="${l.quantite != null ? l.quantite : 0}" class="right"></td>
+        <td><input class="add-unite" data-i="${i}" value="${escapeHtml(l.unite || '')}" placeholder="u, ml, m², h…"></td>
+        <td><input class="add-prix"  data-i="${i}" type="number" step="0.01" value="${l.prix_propose != null ? l.prix_propose : ''}" placeholder="vide = à chiffrer par le BE" class="right"></td>
+        <td><input class="add-rem"   data-i="${i}" value="${escapeHtml(l.remarque || '')}" placeholder="Précision (optionnel)"></td>
+        <td class="center"><button class="btn-icon danger" data-action="add-remove" data-i="${i}" title="Supprimer">🗑</button></td>
+      </tr>
+    `).join('');
+
+    const totalBytes = attachmentsTotalBytes(draft.attachments);
+    const overBudget = totalBytes > maxBytes;
+    const attHtml = (draft.attachments || []).map((a, i) => `
+      <li>
+        📎 <strong>${escapeHtml(a.name || 'fichier')}</strong>
+        <span class="muted small">— ${formatBytes(a.size || 0)}${a.mime ? ' · ' + escapeHtml(a.mime) : ''}</span>
+        <button class="btn-icon danger" data-action="att-remove" data-i="${i}" title="Retirer">🗑</button>
+      </li>
+    `).join('');
+
+    return `
+      <h3 style="margin-top:18px">📤 Ma réponse au BE</h3>
+      <p class="muted small">Tu peux annoter les lignes du devis (au-dessus), ajouter des prestations manquantes, écrire une remarque générale et joindre des documents. Ta réponse sera chiffrée et exportable en .ndev-reply à renvoyer au BE.</p>
+
+      <h4 style="margin-top:14px">➕ Lignes à ajouter (manquantes au devis)</h4>
+      <p class="muted small">Laisse le prix vide si tu veux que le BE chiffre la ligne ; renseigne-le pour faire une contre-proposition.</p>
+      <table class="data-table">
+        <thead><tr>
+          <th>Désignation</th>
+          <th class="right" style="width:80px">Qté</th>
+          <th style="width:80px">Unité</th>
+          <th class="right" style="width:110px">Prix proposé</th>
+          <th>Remarque</th>
+          <th class="center" style="width:50px"></th>
+        </tr></thead>
+        <tbody id="add-lines-body">${linesHtml || '<tr><td colspan="6" class="muted center small">Aucune ligne ajoutée — clique sur « ➕ Ajouter une ligne »</td></tr>'}</tbody>
+      </table>
+      <button class="btn ghost" id="btn-add-line" style="margin-top:6px">➕ Ajouter une ligne</button>
+
+      <h4 style="margin-top:14px">💬 Remarque globale sur l'étude de prix</h4>
+      <textarea id="rem-globale" rows="3" class="full" placeholder="Délais, contraintes chantier, suggestions globales…">${escapeHtml(draft.remarque_globale || '')}</textarea>
+
+      <h4 style="margin-top:14px">📎 Pièces jointes <span class="muted small">(${formatBytes(totalBytes)} / ${formatBytes(maxBytes)} max)</span></h4>
+      <div id="att-drop" style="border:2px dashed var(--border);padding:18px;text-align:center;border-radius:8px;cursor:pointer;background:var(--bg-2)">
+        <p class="muted small" style="margin:0">Glisse-dépose des fichiers (plans, photos, fiches techniques) ou clique pour choisir.</p>
+        <input type="file" id="att-input" multiple style="display:none">
+      </div>
+      ${overBudget ? '<div class="status-box err" style="margin-top:8px">⚠ Limite de taille dépassée — retire des PJ avant d\'exporter.</div>' : ''}
+      <ul id="att-list" style="list-style:none;padding:0;margin-top:8px">${attHtml}</ul>
+    `;
+  }
+
   async function openViewModal(id) {
     const r = await window.api.ndev.receivedGet({ id });
     if (!r.ok) return toast(r.error, 'danger');
@@ -245,6 +358,12 @@
 
     let viewIdx = versions.length ? versions.length - 1 : -1;
     let compareIdx = -1;
+
+    // Brouillon de réponse (annotations + lignes ajoutées + PJ + remarque globale).
+    const draft = Object.assign(emptyDraft(), rq.response_data || {});
+    if (draft.version_target == null && versions.length) draft.version_target = versions[versions.length - 1].numero;
+
+    const MAX_BYTES = 20 * 1024 * 1024;
 
     const versionOptions = versions.map((v, i) =>
       `<option value="${i}">v${v.numero} — ${formatDate(v.created_at).split(' ')[0]}</option>`
@@ -281,11 +400,13 @@
           </label>
         </div>` : ''}
 
-        <div id="version-detail">${renderVersionDetail(p, viewIdx, compareIdx)}</div>
+        <div id="version-detail">${renderVersionDetail(p, viewIdx, compareIdx, draft)}</div>
 
-        ${p.notes ? `<h3 style="margin-top:14px">Notes</h3><div class="status-box warn">${escapeHtml(p.notes)}</div>` : ''}
+        ${p.notes ? `<h3 style="margin-top:14px">Notes du BE</h3><div class="status-box warn">${escapeHtml(p.notes)}</div>` : ''}
 
-        <h3 style="margin-top:14px">Réponse</h3>
+        <div id="response-section">${renderResponseSection(draft, MAX_BYTES)}</div>
+
+        <h3 style="margin-top:14px">Statut & notes internes</h3>
         <label>Statut
           <select id="rq-statut">
             <option value="lu" ${rq.statut === 'lu' ? 'selected' : ''}>👁 Lu (en cours d'examen)</option>
@@ -299,25 +420,137 @@
       `,
       footer: `
         <button class="btn ghost" data-action="close">Fermer</button>
-        <button class="btn primary" data-action="save">💾 Enregistrer la réponse</button>
+        <button class="btn" data-action="save-statut">💾 Enregistrer statut</button>
+        <button class="btn" data-action="save-draft">📝 Enregistrer mes annotations</button>
+        <button class="btn primary" data-action="export-reply">📤 Exporter ma réponse (.ndev-reply)</button>
       `,
       onMount: ({ body, footer, close }) => {
         const detailEl = body.querySelector('#version-detail');
+        const respEl = body.querySelector('#response-section');
         const verSel = body.querySelector('#ver-view');
         const cmpSel = body.querySelector('#ver-compare');
-        const refreshDetail = () => { detailEl.innerHTML = renderVersionDetail(p, viewIdx, compareIdx); };
-        if (verSel) verSel.onchange = (e) => { viewIdx = parseInt(e.target.value, 10); refreshDetail(); };
+
+        // Capture les remarques par ligne (DOM event delegation : se rebind après chaque refresh).
+        const bindLineRemarks = () => {
+          detailEl.querySelectorAll('textarea.line-remark').forEach(t => {
+            t.onchange = (e) => {
+              const k = e.target.dataset.lineKey;
+              const v = e.target.value || '';
+              if (v) draft.remarques_lignes[k] = v;
+              else delete draft.remarques_lignes[k];
+            };
+          });
+        };
+
+        const refreshDetail = () => {
+          detailEl.innerHTML = renderVersionDetail(p, viewIdx, compareIdx, draft);
+          bindLineRemarks();
+        };
+        const refreshResponse = () => {
+          respEl.innerHTML = renderResponseSection(draft, MAX_BYTES);
+          bindResponseHandlers();
+        };
+
+        if (verSel) verSel.onchange = (e) => {
+          viewIdx = parseInt(e.target.value, 10);
+          if (versions[viewIdx]) draft.version_target = versions[viewIdx].numero;
+          refreshDetail();
+        };
         if (cmpSel) cmpSel.onchange = (e) => { compareIdx = parseInt(e.target.value, 10); refreshDetail(); };
 
+        // Câblage des handlers de la section « Réponse au BE » (à rebind après chaque refresh).
+        const bindResponseHandlers = () => {
+          const onAddInputChange = (e) => {
+            const i = parseInt(e.target.dataset.i, 10);
+            if (!draft.lignes_ajoutees[i]) return;
+            const cls = e.target.className;
+            if (cls.includes('add-desig')) draft.lignes_ajoutees[i].designation = e.target.value;
+            else if (cls.includes('add-qte')) draft.lignes_ajoutees[i].quantite = parseFloat(e.target.value) || 0;
+            else if (cls.includes('add-unite')) draft.lignes_ajoutees[i].unite = e.target.value;
+            else if (cls.includes('add-prix')) {
+              const v = e.target.value;
+              draft.lignes_ajoutees[i].prix_propose = v === '' ? null : (parseFloat(v) || 0);
+            }
+            else if (cls.includes('add-rem')) draft.lignes_ajoutees[i].remarque = e.target.value;
+          };
+          respEl.querySelectorAll('.add-desig, .add-qte, .add-unite, .add-prix, .add-rem').forEach(el => {
+            el.onchange = onAddInputChange;
+          });
+          respEl.querySelectorAll('[data-action="add-remove"]').forEach(btn => {
+            btn.onclick = () => {
+              const i = parseInt(btn.dataset.i, 10);
+              draft.lignes_ajoutees.splice(i, 1);
+              refreshResponse();
+            };
+          });
+          const btnAdd = respEl.querySelector('#btn-add-line');
+          if (btnAdd) btnAdd.onclick = () => {
+            draft.lignes_ajoutees.push({ designation: '', quantite: 1, unite: '', prix_propose: null, remarque: '' });
+            refreshResponse();
+          };
+          const remGlob = respEl.querySelector('#rem-globale');
+          if (remGlob) remGlob.onchange = (e) => { draft.remarque_globale = e.target.value; };
+
+          const dropZone = respEl.querySelector('#att-drop');
+          const fileInput = respEl.querySelector('#att-input');
+          const handleFiles = async (fileList) => {
+            const arr = Array.from(fileList || []);
+            for (const f of arr) {
+              if (attachmentsTotalBytes(draft.attachments) + (f.size || 0) > MAX_BYTES) {
+                toast(`Limite ${formatBytes(MAX_BYTES)} dépassée — "${f.name}" ignoré`, 'danger');
+                continue;
+              }
+              try {
+                const data_b64 = await fileToBase64(f);
+                draft.attachments.push({ name: f.name, size: f.size, mime: f.type || '', data_b64 });
+              } catch (e) { toast('Lecture impossible : ' + e.message, 'danger'); }
+            }
+            refreshResponse();
+          };
+          if (dropZone) {
+            dropZone.onclick = () => fileInput.click();
+            dropZone.ondragover = (e) => { e.preventDefault(); dropZone.style.borderColor = 'var(--primary)'; };
+            dropZone.ondragleave = () => { dropZone.style.borderColor = 'var(--border)'; };
+            dropZone.ondrop = (e) => { e.preventDefault(); dropZone.style.borderColor = 'var(--border)'; handleFiles(e.dataTransfer.files); };
+          }
+          if (fileInput) fileInput.onchange = (e) => handleFiles(e.target.files);
+          respEl.querySelectorAll('[data-action="att-remove"]').forEach(btn => {
+            btn.onclick = () => {
+              const i = parseInt(btn.dataset.i, 10);
+              draft.attachments.splice(i, 1);
+              refreshResponse();
+            };
+          });
+        };
+
+        bindLineRemarks();
+        bindResponseHandlers();
+
         footer.querySelector('[data-action="close"]').onclick = () => close(true);
-        footer.querySelector('[data-action="save"]').onclick = async () => {
+
+        footer.querySelector('[data-action="save-statut"]').onclick = async () => {
           const r = await window.api.ndev.receivedSetStatut({
             id: rq.id,
             statut: body.querySelector('#rq-statut').value,
             notes: body.querySelector('#rq-notes').value
           });
-          if (r.ok) { toast('Enregistré', 'success'); close(true); refresh(); }
+          if (r.ok) { toast('Statut enregistré', 'success'); refresh(); }
           else toast(r.error, 'danger');
+        };
+
+        footer.querySelector('[data-action="save-draft"]').onclick = async () => {
+          const r = await window.api.quoteResponse.saveDraft({ receivedId: rq.id, data: draft });
+          if (r.ok) toast('Annotations enregistrées', 'success');
+          else toast(r.error || 'Échec sauvegarde', 'danger');
+        };
+
+        footer.querySelector('[data-action="export-reply"]').onclick = async () => {
+          const sv = await window.api.quoteResponse.saveDraft({ receivedId: rq.id, data: draft });
+          if (!sv.ok) return toast(sv.error || 'Échec sauvegarde', 'danger');
+          const r = await window.api.quoteResponse.export({ receivedId: rq.id });
+          if (!r.ok) return toast(r.error || 'Échec export', 'danger');
+          downloadFile(r.file_name, r.content, 'application/json');
+          toast('Réponse exportée — envoie le .ndev-reply au BE', 'success');
         };
       }
     });
