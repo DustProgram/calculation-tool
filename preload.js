@@ -171,6 +171,18 @@ contextBridge.exposeInMainWorld('api', {
     sentLog: (p) => ipcRenderer.invoke('ndev:sentLog', p),
     openInbox: () => ipcRenderer.invoke('ndev:openInbox')
   },
+  // Réponses annotées Artisan ↔ BE (.ndev-reply)
+  quoteResponse: {
+    saveDraft: (p) => ipcRenderer.invoke('quoteResponse:saveDraft', p),
+    getDraft: (p) => ipcRenderer.invoke('quoteResponse:getDraft', p),
+    export: (p) => ipcRenderer.invoke('quoteResponse:export', p),
+    import: (p) => ipcRenderer.invoke('quoteResponse:import', p),
+    receivedList: () => ipcRenderer.invoke('quoteResponse:receivedList'),
+    receivedGet: (p) => ipcRenderer.invoke('quoteResponse:receivedGet', p),
+    receivedSetStatut: (p) => ipcRenderer.invoke('quoteResponse:receivedSetStatut', p),
+    receivedDelete: (p) => ipcRenderer.invoke('quoteResponse:receivedDelete', p),
+    integrate: (p) => ipcRenderer.invoke('quoteResponse:integrate', p)
+  },
   // Sauvegarde / restauration
   backup: {
     export: () => ipcRenderer.invoke('backup:export'),

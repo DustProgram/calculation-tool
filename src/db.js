@@ -243,7 +243,9 @@ function openUserDb(userId, dek) {
     // Phase 2.1 : distance et nb trajets par chantier
     `ALTER TABLE sites ADD COLUMN distance_km REAL DEFAULT 0`,
     `ALTER TABLE sites ADD COLUMN nb_trajets_jour REAL DEFAULT 2`,
-    `ALTER TABLE sites ADD COLUMN nb_jours_estim REAL DEFAULT 0`
+    `ALTER TABLE sites ADD COLUMN nb_jours_estim REAL DEFAULT 0`,
+    // Phase 4 : réponse de l'artisan annotée (annotations + lignes ajoutées + PJ)
+    `ALTER TABLE received_quotes ADD COLUMN response_data TEXT`
   ];
   migrations.forEach(sql => {
     try { wrap.exec(sql); } catch (_) { /* colonne déjà présente */ }
@@ -536,8 +538,26 @@ const SCHEMA_USER = `
     FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE SET NULL
   );
 
+  -- Réponses reçues (côté BE, après import d'un .ndev-reply de l'artisan)
+  CREATE TABLE IF NOT EXISTS quote_responses_received (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sender_label TEXT,                -- libellé de l'artisan
+    sender_pub TEXT,                  -- clé publique de l'artisan
+    subject TEXT,                     -- sujet de la réponse (souvent reprend le devis)
+    received_at INTEGER NOT NULL,
+    issued_at INTEGER,                -- date d'envoi par l'artisan
+    original_code TEXT,               -- code du devis BE concerné
+    quote_id INTEGER,                 -- résolu localement à l'import si trouvé
+    payload TEXT NOT NULL,            -- JSON déchiffré (annotations + lignes proposées + PJ)
+    statut TEXT DEFAULT 'nouveau',    -- 'nouveau', 'lu', 'traite'
+    notes TEXT,
+    FOREIGN KEY (quote_id) REFERENCES quotes(id) ON DELETE SET NULL
+  );
+
   CREATE INDEX IF NOT EXISTS idx_recv_received_at ON received_quotes(received_at);
   CREATE INDEX IF NOT EXISTS idx_sent_quote_id ON sent_quotes_log(quote_id);
+  CREATE INDEX IF NOT EXISTS idx_qresp_received_at ON quote_responses_received(received_at);
+  CREATE INDEX IF NOT EXISTS idx_qresp_quote_id ON quote_responses_received(quote_id);
 `;
 
 module.exports = {

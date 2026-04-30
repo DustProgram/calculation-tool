@@ -9,6 +9,7 @@ const { autoUpdater } = require('electron-updater');
 const cryptoMod = require('./src/crypto');
 const dbMod = require('./src/db');
 const ndev = require('./src/ndev');
+const quoteResponse = require('./src/quote-response');
 const etude = require('./src/etude');
 const artisan = require('./src/artisan');
 const compta = require('./src/compta');
@@ -1068,6 +1069,64 @@ ipcMain.handle('ndev:received:delete', async (_e, { id }) => {
 
 ipcMain.handle('ndev:sentLog', async (_e, { quoteId } = {}) => {
   try { return { ok: true, data: ndev.listSentLog(requireSession(), { quoteId }) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+// ------------------------------------------------------------------------
+// IPC : .ndev-reply (réponse Artisan ↔ BE avec annotations + lignes proposées + PJ)
+// ------------------------------------------------------------------------
+
+// Côté Artisan : brouillon de réponse local
+ipcMain.handle('quoteResponse:saveDraft', async (_e, { receivedId, data }) => {
+  try { return { ok: true, data: quoteResponse.saveDraftResponse(requireSession(), receivedId, data) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('quoteResponse:getDraft', async (_e, { receivedId }) => {
+  try { return { ok: true, data: quoteResponse.getDraftResponse(requireSession(), receivedId) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+// Côté Artisan : produit l'enveloppe .ndev-reply pour le BE
+ipcMain.handle('quoteResponse:export', async (_e, { receivedId }) => {
+  try {
+    if (!session) throw new Error('Non connecté');
+    const env = quoteResponse.exportResponse(requireSession(), session.dek, receivedId);
+    const fname = `reponse-${(env.subject || 'devis').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${receivedId}.ndev-reply`;
+    return { ok: true, file_name: fname, content: JSON.stringify(env, null, 2) };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+// Côté BE : import + consultation des réponses reçues
+ipcMain.handle('quoteResponse:import', async (_e, { content }) => {
+  try {
+    if (!session) throw new Error('Non connecté');
+    return { ok: true, data: quoteResponse.importResponse(requireSession(), session.dek, content) };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('quoteResponse:receivedList', async () => {
+  try { return { ok: true, data: quoteResponse.listReceivedResponses(requireSession()) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('quoteResponse:receivedGet', async (_e, { id }) => {
+  try { return { ok: true, data: quoteResponse.getReceivedResponse(requireSession(), id) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('quoteResponse:receivedSetStatut', async (_e, { id, statut, notes }) => {
+  try { quoteResponse.setReceivedResponseStatut(requireSession(), id, statut, notes); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('quoteResponse:receivedDelete', async (_e, { id }) => {
+  try { quoteResponse.deleteReceivedResponse(requireSession(), id); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('quoteResponse:integrate', async (_e, { id }) => {
+  try { return { ok: true, data: quoteResponse.integrateResponseIntoQuote(requireSession(), id) }; }
   catch (e) { return { ok: false, error: e.message }; }
 });
 
