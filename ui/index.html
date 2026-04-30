@@ -21,11 +21,12 @@
       </div>
     </div>
 
-    <!-- Onglets login / signup / recover -->
+    <!-- Onglets login / signup / recover / restore -->
     <div class="tabs" id="auth-tabs">
       <button class="tab active" data-tab="login">Connexion</button>
       <button class="tab" data-tab="signup">Créer un compte</button>
       <button class="tab" data-tab="recover">Mot de passe oublié</button>
+      <button class="tab" data-tab="restore">Restaurer</button>
     </div>
 
     <!-- Login -->
@@ -75,6 +76,20 @@
       </label>
       <button class="btn primary" id="btn-recover">Réinitialiser</button>
       <p class="error" id="recover-error"></p>
+    </div>
+
+    <!-- Restore from backup -->
+    <div class="tab-pane" id="tab-restore">
+      <p class="muted small">Restaure toutes tes données depuis un fichier de sauvegarde <code>.nbak</code> créé sur un autre poste.</p>
+      <div id="restore-meta" style="display:none;margin-bottom:12px">
+        <div class="status-box ok" id="restore-info"></div>
+      </div>
+      <button class="btn ghost" id="btn-select-backup" style="margin-bottom:12px">📂 Sélectionner un fichier .nbak</button>
+      <label id="restore-pwd-label" style="display:none">Mot de passe du compte sauvegardé
+        <input type="password" id="restore-password" placeholder="••••••••" autocomplete="current-password">
+      </label>
+      <button class="btn primary" id="btn-restore" style="display:none">Restaurer et se connecter</button>
+      <p class="error" id="restore-error"></p>
     </div>
   </div>
 

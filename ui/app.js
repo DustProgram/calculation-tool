@@ -453,6 +453,50 @@ window.App.onLicenseChanged = () => {
 // BOOT
 // =========================================================================
 
+// =========================================================================
+// RESTAURATION depuis sauvegarde
+// =========================================================================
+
+function setupRestore() {
+  let hasPendingBackup = false;
+
+  $('#btn-select-backup').addEventListener('click', async () => {
+    const errEl = $('#restore-error');
+    errEl.textContent = '';
+    const r = await window.api.backup.import();
+    if (r.canceled) return;
+    if (!r.ok) { errEl.textContent = r.error; return; }
+
+    hasPendingBackup = true;
+    const date = r.meta.created_at ? new Date(r.meta.created_at).toLocaleDateString('fr-FR') : '—';
+    $('#restore-info').innerHTML =
+      `Compte : <strong>${escapeHtml(r.meta.user_login)}</strong>` +
+      (r.meta.user_display_name ? ` (${escapeHtml(r.meta.user_display_name)})` : '') +
+      `<br>Créée le : ${date}`;
+    $('#restore-meta').style.display = '';
+    $('#restore-pwd-label').style.display = '';
+    $('#btn-restore').style.display = '';
+    $('#restore-password').focus();
+  });
+
+  $('#restore-password').addEventListener('keydown', e => { if (e.key === 'Enter') $('#btn-restore').click(); });
+
+  $('#btn-restore').addEventListener('click', async () => {
+    const errEl = $('#restore-error');
+    errEl.textContent = '';
+    if (!hasPendingBackup) { errEl.textContent = 'Sélectionne d\'abord un fichier .nbak.'; return; }
+    const password = $('#restore-password').value;
+    if (!password) { errEl.textContent = 'Mot de passe requis.'; return; }
+
+    const r = await window.api.backup.importConfirm({ password });
+    if (!r.ok) { errEl.textContent = r.error; return; }
+
+    hasPendingBackup = false;
+    currentUser = r.user;
+    goToProfilSelector();
+  });
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
   setupTheme();
   bindAuthTabs();
@@ -461,6 +505,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   $('#btn-signup').addEventListener('click', doSignup);
   $('#btn-login').addEventListener('click', doLogin);
   $('#btn-recover').addEventListener('click', doRecover);
+  setupRestore();
 
   // Entrée pour valider
   $('#login-password').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });

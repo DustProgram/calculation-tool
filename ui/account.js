@@ -121,6 +121,16 @@
         </div>
       `}
 
+      <div class="card-block">
+        <h3>💾 Sauvegarde & transfert entre postes</h3>
+        <p class="muted small">Exporte toutes tes données (base de prix, devis, compositions, chantiers, etc.) dans un fichier <code>.nbak</code> chiffré. Importe ce fichier sur un autre poste via l'onglet "Restaurer" de l'écran de connexion.</p>
+        <div class="status-box warn" style="margin-bottom:12px">
+          ⚠️ Le fichier de sauvegarde est chiffré avec ta clé de session — tu auras besoin de ton mot de passe pour le restaurer.
+        </div>
+        <button class="btn primary" id="btn-backup-export">⬇️ Exporter une sauvegarde (.nbak)</button>
+        <p id="backup-export-status" class="muted small" style="margin-top:8px"></p>
+      </div>
+
       <div class="card-block about-block">
         <h3>ℹ️ À propos</h3>
         <p>
@@ -209,6 +219,25 @@
     };
     const btnGenLic = $('#btn-gen-lic');
     if (btnGenLic) btnGenLic.onclick = openGenerateLicenseModal;
+
+    // BIND : Sauvegarde
+    const btnBackup = $('#btn-backup-export');
+    if (btnBackup) {
+      btnBackup.onclick = async () => {
+        btnBackup.disabled = true;
+        const statusEl = $('#backup-export-status');
+        statusEl.textContent = 'Export en cours…';
+        const r = await window.api.backup.export();
+        btnBackup.disabled = false;
+        if (r.canceled) {
+          statusEl.textContent = '';
+        } else if (!r.ok) {
+          statusEl.innerHTML = `<span style="color:var(--danger)">❌ ${escapeHtml(r.error)}</span>`;
+        } else {
+          statusEl.innerHTML = `<span style="color:var(--success)">✅ Sauvegarde exportée : ${escapeHtml(r.path)}</span>`;
+        }
+      };
+    }
 
     // Affichage de la version
     if (window.api.app && window.api.app.version) {
