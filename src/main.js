@@ -10,6 +10,7 @@ const cryptoMod = require('./src/crypto');
 const dbMod = require('./src/db');
 const ndev = require('./src/ndev');
 const etude = require('./src/etude');
+const contacts = require('./src/contacts');
 const excelMod = require('./src/excel');
 // pdf.js est require()-é en lazy uniquement quand on fait un export PDF
 // (pdfmake a une chaîne de deps fragile qui peut planter le boot).
@@ -466,20 +467,82 @@ ipcMain.handle('etude:reindex:history', async () => {
 });
 
 // ------------------------------------------------------------------------
-// IPC : .ndev (stub Phase 0, à compléter en Phase 3)
+// IPC : .ndev
 // ------------------------------------------------------------------------
 
-ipcMain.handle('ndev:exportStub', async (_evt, payload) => {
+ipcMain.handle('ndev:export', async (_evt, { quoteId, contactIds, subject }) => {
   if (!session) return { ok: false, error: 'Non connecté.' };
-  const result = await dialog.showSaveDialog(mainWindow, {
-    title: 'Exporter le devis',
-    defaultPath: `devis-${Date.now()}.ndev`,
-    filters: [{ name: 'Fichier de devis', extensions: ['ndev'] }]
-  });
-  if (result.canceled) return { ok: false, error: 'Annulé.' };
-  const data = ndev.serialize(payload || { stub: true, generatedAt: Date.now() });
-  fs.writeFileSync(result.filePath, data);
-  return { ok: true, path: result.filePath };
+  try {
+    const db = requireSession();
+    const files = [];
+    for (const contactId of contactIds) {
+      const contact = contacts.getContact(db, contactId);
+      if (!contact) throw new Error('Contact introuvable : ' + contactId);
+      const envelope = ndev.exportQuoteToNdev(db, session.dek, quoteId, contact.pub_key, { subject });
+      const content = JSON.stringify(envelope, null, 2);
+      const safeName = (envelope.subject || `devis-${quoteId}`)
+        .replace(/[^a-zA-Z0-9\-_]/g, '_').slice(0, 40);
+      const safeContact = (contact.label || String(contactId))
+        .replace(/[^a-zA-Z0-9\-_]/g, '_').slice(0, 30);
+      const fileName = `${safeName}-${safeContact}.ndev`;
+      ndev.logSent(db, quoteId, contactId, fileName);
+      files.push({ contact_label: contact.label, contact_email: contact.email || '', content, file_name: fileName });
+    }
+    return { ok: true, files };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('ndev:import', async (_evt, payload) => {
+  if (!session) return { ok: false, error: 'Non connecté.' };
+  try {
+    const db = requireSession();
+    // payload.content si fourni directement (drag-drop), sinon ouvre un dialogue
+    let content = payload && payload.content;
+    if (!content) {
+      const r = await dialog.showOpenDialog(mainWindow, {
+        title: 'Importer un fichier .ndev',
+        filters: [{ name: 'Fichier de devis', extensions: ['ndev'] }],
+        properties: ['openFile']
+      });
+      if (r.canceled || !r.filePaths[0]) return { ok: false, canceled: true };
+      content = fs.readFileSync(r.filePaths[0], 'utf8');
+    }
+    const result = ndev.importNdev(db, session.dek, content);
+    return { ok: true, ...result };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('ndev:received:list', async () => {
+  if (!session) return { ok: false, error: 'Non connecté.' };
+  try { return { ok: true, data: ndev.listReceivedQuotes(requireSession()) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('ndev:received:get', async (_evt, { id }) => {
+  if (!session) return { ok: false, error: 'Non connecté.' };
+  try {
+    const r = ndev.getReceivedQuote(requireSession(), id);
+    if (!r) return { ok: false, error: 'Devis reçu introuvable.' };
+    return { ok: true, data: r };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('ndev:received:setStatut', async (_evt, { id, statut, notes }) => {
+  if (!session) return { ok: false, error: 'Non connecté.' };
+  try { ndev.setReceivedQuoteStatut(requireSession(), id, statut, notes); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('ndev:received:delete', async (_evt, { id }) => {
+  if (!session) return { ok: false, error: 'Non connecté.' };
+  try { ndev.deleteReceivedQuote(requireSession(), id); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('ndev:sentLog', async (_evt, payload) => {
+  if (!session) return { ok: false, error: 'Non connecté.' };
+  try { return { ok: true, data: ndev.listSentLog(requireSession(), payload || {}) }; }
+  catch (e) { return { ok: false, error: e.message }; }
 });
 
 ipcMain.handle('ndev:openInbox', async () => {

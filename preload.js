@@ -168,11 +168,7 @@ contextBridge.exposeInMainWorld('api', {
     receivedGet: (p) => ipcRenderer.invoke('ndev:received:get', p),
     receivedSetStatut: (p) => ipcRenderer.invoke('ndev:received:setStatut', p),
     receivedDelete: (p) => ipcRenderer.invoke('ndev:received:delete', p),
-    sentLog: (p) => ipcRenderer.invoke('ndev:sentLog', p)
-  },
-  // .ndev (stubs Phase 0)
-  ndev: {
-    exportStub: (payload) => ipcRenderer.invoke('ndev:exportStub', payload),
+    sentLog: (p) => ipcRenderer.invoke('ndev:sentLog', p),
     openInbox: () => ipcRenderer.invoke('ndev:openInbox')
   },
   // Divers
