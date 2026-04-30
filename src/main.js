@@ -551,6 +551,140 @@ ipcMain.handle('ndev:openInbox', async () => {
 });
 
 // ------------------------------------------------------------------------
+// IPC : backup/restore
+// ------------------------------------------------------------------------
+
+let _pendingBackupContent = null;
+
+ipcMain.handle('backup:export', async () => {
+  if (!session) return { ok: false, error: 'Non connecté.' };
+  try {
+    const user = dbMod.systemDb().getUserByLogin(session.login);
+    if (!user) throw new Error('Utilisateur introuvable.');
+
+    dbMod.userDb().flush();
+    const userDbPath = path.join(getAppDir(), `user-${session.userId}.db`);
+    const userDbData = fs.readFileSync(userDbPath);
+
+    const encUserDb = cryptoMod.aesGcmEncrypt(userDbData, session.dek);
+
+    const backupPayload = {
+      v: 1,
+      format: 'nuclear-estim-backup',
+      created_at: Date.now(),
+      user_login: user.login,
+      user_display_name: user.display_name,
+      system_entry: {
+        salt: user.salt,
+        wrapped_by_password: user.wrapped_by_password,
+        wrapped_by_mnemonic: user.wrapped_by_mnemonic,
+        public_key: user.public_key,
+        enc_priv_key: user.enc_priv_key,
+        profil_default: user.profil_default
+      },
+      user_db_encrypted: encUserDb
+    };
+
+    const r = await dialog.showSaveDialog(mainWindow, {
+      title: 'Exporter la sauvegarde',
+      defaultPath: `sauvegarde-${user.login}-${new Date().toISOString().split('T')[0]}.nbak`,
+      filters: [{ name: 'Sauvegarde Nuclear Estim', extensions: ['nbak'] }]
+    });
+    if (r.canceled) return { ok: false, canceled: true };
+
+    fs.writeFileSync(r.filePath, JSON.stringify(backupPayload), 'utf8');
+    return { ok: true, path: r.filePath };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
+
+ipcMain.handle('backup:import', async () => {
+  try {
+    const r = await dialog.showOpenDialog(mainWindow, {
+      title: 'Sélectionner une sauvegarde',
+      filters: [{ name: 'Sauvegarde Nuclear Estim', extensions: ['nbak', 'json'] }],
+      properties: ['openFile']
+    });
+    if (r.canceled || !r.filePaths[0]) return { ok: false, canceled: true };
+
+    const content = fs.readFileSync(r.filePaths[0], 'utf8');
+    let parsed;
+    try { parsed = JSON.parse(content); } catch (_) {
+      return { ok: false, error: 'Fichier invalide (JSON malformé).' };
+    }
+    if (parsed.format !== 'nuclear-estim-backup' || parsed.v !== 1) {
+      return { ok: false, error: 'Ce fichier n\'est pas une sauvegarde Nuclear Estim valide.' };
+    }
+
+    _pendingBackupContent = content;
+    return {
+      ok: true,
+      meta: {
+        user_login: parsed.user_login,
+        user_display_name: parsed.user_display_name,
+        created_at: parsed.created_at
+      }
+    };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
+
+ipcMain.handle('backup:importConfirm', async (_evt, { password }) => {
+  try {
+    if (!_pendingBackupContent) throw new Error('Aucune sauvegarde en attente. Recommence depuis le début.');
+    const content = _pendingBackupContent;
+    _pendingBackupContent = null;
+
+    const parsed = JSON.parse(content);
+    const { system_entry, user_db_encrypted, user_login, user_display_name } = parsed;
+    const { salt, wrapped_by_password, wrapped_by_mnemonic, public_key, enc_priv_key, profil_default } = system_entry;
+
+    const saltBuf = Buffer.from(salt, 'base64');
+    const masterKey = cryptoMod.deriveKey(password, saltBuf);
+
+    let dek;
+    try {
+      dek = cryptoMod.aesGcmDecrypt(JSON.parse(wrapped_by_password), masterKey);
+    } catch (_) {
+      throw new Error('Mot de passe incorrect pour cette sauvegarde.');
+    }
+
+    let userDbBuf;
+    try {
+      userDbBuf = cryptoMod.aesGcmDecrypt(JSON.parse(user_db_encrypted), dek);
+    } catch (_) {
+      throw new Error('Impossible de déchiffrer la base de données (sauvegarde corrompue).');
+    }
+
+    const userId = dbMod.systemDb().upsertUserFromBackup({
+      login: user_login,
+      displayName: user_display_name,
+      profilDefault: profil_default || 'etude',
+      salt,
+      wrappedByPassword: wrapped_by_password,
+      wrappedByMnemonic: wrapped_by_mnemonic,
+      publicKey: public_key,
+      encPrivKey: enc_priv_key
+    });
+
+    const userDbPath = path.join(getAppDir(), `user-${userId}.db`);
+    fs.writeFileSync(userDbPath, userDbBuf);
+
+    session = { userId, login: user_login, displayName: user_display_name, profil: profil_default || 'etude', dek };
+    dbMod.openUserDb(userId, dek);
+
+    return {
+      ok: true,
+      user: { id: userId, login: user_login, displayName: user_display_name, profilDefault: profil_default || 'etude' }
+    };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
+
+// ------------------------------------------------------------------------
 // IPC : utilitaires
 // ------------------------------------------------------------------------
 

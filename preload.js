@@ -171,6 +171,12 @@ contextBridge.exposeInMainWorld('api', {
     sentLog: (p) => ipcRenderer.invoke('ndev:sentLog', p),
     openInbox: () => ipcRenderer.invoke('ndev:openInbox')
   },
+  // Sauvegarde / restauration
+  backup: {
+    export: () => ipcRenderer.invoke('backup:export'),
+    import: () => ipcRenderer.invoke('backup:import'),
+    importConfirm: (p) => ipcRenderer.invoke('backup:importConfirm', p)
+  },
   // Divers
   app: {
     openDataFolder: () => ipcRenderer.invoke('app:openDataFolder'),

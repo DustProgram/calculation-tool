@@ -178,6 +178,26 @@ function buildSystemApi(db) {
     updateWrappedPassword(userId, newWrapped) {
       db.prepare('UPDATE users SET wrapped_by_password = ?, updated_at = ? WHERE id = ?')
         .run(newWrapped, Date.now(), userId);
+    },
+    upsertUserFromBackup({ login, displayName, profilDefault, salt, wrappedByPassword, wrappedByMnemonic, publicKey, encPrivKey }) {
+      const now = Date.now();
+      const existing = db.prepare('SELECT id FROM users WHERE login = ?').get(login);
+      if (existing) {
+        db.prepare(`
+          UPDATE users SET
+            display_name = ?, profil_default = ?, salt = ?,
+            wrapped_by_password = ?, wrapped_by_mnemonic = ?,
+            public_key = ?, enc_priv_key = ?, updated_at = ?
+          WHERE login = ?
+        `).run(displayName, profilDefault, salt, wrappedByPassword, wrappedByMnemonic, publicKey, encPrivKey, now, login);
+        return existing.id;
+      }
+      const info = db.prepare(`
+        INSERT INTO users
+          (login, display_name, profil_default, salt, wrapped_by_password, wrapped_by_mnemonic, public_key, enc_priv_key, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(login, displayName, profilDefault, salt, wrappedByPassword, wrappedByMnemonic, publicKey, encPrivKey, now, now);
+      return info.lastInsertRowid;
     }
   };
 }
