@@ -126,7 +126,29 @@ function importNdev(db, dek, ndevContent) {
   try { payload = JSON.parse(payloadJson); }
   catch (_) { throw new Error('Payload déchiffré invalide'); }
 
-  // Stocke dans received_quotes
+  // Si un devis avec le même code venant du même expéditeur existe déjà,
+  // on remplace son payload (qui contient l'historique complet des versions)
+  // au lieu d'en créer un doublon. Les notes internes de l'artisan sont préservées,
+  // et le statut repasse à 'nouveau' pour signaler la révision.
+  const now = Date.now();
+  if (payload.code && env.from_pub) {
+    const candidates = db.prepare(`
+      SELECT id, payload FROM received_quotes WHERE sender_pub = ?
+    `).all(env.from_pub);
+    const existing = candidates.find(c => {
+      try { return JSON.parse(c.payload).code === payload.code; }
+      catch (_) { return false; }
+    });
+    if (existing) {
+      db.prepare(`
+        UPDATE received_quotes
+        SET subject = ?, received_at = ?, issued_at = ?, payload = ?, statut = 'nouveau'
+        WHERE id = ?
+      `).run(env.subject || '', now, env.issued_at || null, JSON.stringify(payload), existing.id);
+      return { id: existing.id, subject: env.subject, from: env.from_label, payload, updated: true };
+    }
+  }
+
   const id = db.prepare(`
     INSERT INTO received_quotes (sender_label, sender_pub, subject, received_at, issued_at, payload, statut)
     VALUES (?, ?, ?, ?, ?, ?, 'nouveau')
@@ -134,12 +156,12 @@ function importNdev(db, dek, ndevContent) {
     env.from_label || null,
     env.from_pub || null,
     env.subject || '',
-    Date.now(),
+    now,
     env.issued_at || null,
     JSON.stringify(payload)
   ).lastInsertRowid;
 
-  return { id, subject: env.subject, from: env.from_label, payload };
+  return { id, subject: env.subject, from: env.from_label, payload, updated: false };
 }
 
 function listReceivedQuotes(db) {
