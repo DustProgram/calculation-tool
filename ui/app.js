@@ -327,6 +327,7 @@ const PAGES = {
   'etude-prices': null,
   'etude-compos': null,
   'etude-quotes': null,
+  'etude-responses': null,
   'etude-index':  null
 };
 
@@ -364,6 +365,7 @@ async function renderPage(pageId) {
   if (pageId === 'etude-prices'    && window.EtudePricesPage)    return window.EtudePricesPage.render(content);
   if (pageId === 'etude-compos'    && window.EtudeComposPage)    return window.EtudeComposPage.render(content);
   if (pageId === 'etude-quotes'    && window.EtudeQuotesPage)    return window.EtudeQuotesPage.render(content);
+  if (pageId === 'etude-responses' && window.EtudeResponsesPage) return window.EtudeResponsesPage.render(content);
   if (pageId === 'etude-index'     && window.EtudeIndexPage)     return window.EtudeIndexPage.render(content);
   if (pageId === 'artisan-kpv'       && window.ArtisanKpvPage)       return window.ArtisanKpvPage.render(content);
   if (pageId === 'artisan-equipment' && window.ArtisanEquipmentPage) return window.ArtisanEquipmentPage.render(content);
