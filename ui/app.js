@@ -499,9 +499,26 @@ function setupRestore() {
   });
 }
 
+// Toggle "œil" sur les champs mot de passe (auth, recover, restore).
+function setupPasswordToggles() {
+  $$('.pwd-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetId = btn.dataset.target;
+      const input = document.getElementById(targetId);
+      if (!input) return;
+      const showing = input.type === 'text';
+      input.type = showing ? 'password' : 'text';
+      btn.classList.toggle('is-shown', !showing);
+      btn.setAttribute('aria-label',
+        !showing ? 'Masquer le mot de passe' : 'Afficher le mot de passe');
+    });
+  });
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
   setupTheme();
   bindAuthTabs();
+  setupPasswordToggles();
   await bootAuth();
 
   $('#btn-signup').addEventListener('click', doSignup);

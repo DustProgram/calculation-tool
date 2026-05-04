@@ -146,6 +146,8 @@ input, textarea, select {
   align-items: center;
   justify-content: center;
   background: var(--gradient);
+  position: relative;
+  overflow: hidden;
 }
 
 .auth-card {
@@ -155,6 +157,8 @@ input, textarea, select {
   border-radius: 12px;
   padding: 32px;
   box-shadow: var(--shadow);
+  position: relative;
+  z-index: 1;
 }
 
 .auth-card.large { width: 560px; }
@@ -201,7 +205,9 @@ input, textarea, select {
   margin-bottom: 20px;
 }
 
-.tab {
+/* Onglets PILULE de l'auth (scopés pour ne pas être écrasés
+   par les onglets souligne .tabs-bar .tab plus bas) */
+.tabs .tab {
   flex: 1;
   padding: 8px 4px;
   border: none;
@@ -209,10 +215,20 @@ input, textarea, select {
   color: var(--text-muted);
   border-radius: 6px;
   font-size: 13px;
+  margin: 0;
+  border-bottom: none;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
 }
 
-.tab.active {
+.tabs .tab.active {
   background: var(--bg-3);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.tabs .tab:hover:not(.active) {
   color: var(--text);
 }
 
@@ -262,6 +278,8 @@ input, textarea, select {
   display: flex;
   align-items: center;
   gap: 12px;
+  position: relative;
+  z-index: 1;
 }
 
 .theme-select {
@@ -386,9 +404,16 @@ input, textarea, select {
   align-items: center;
   justify-content: center;
   background: var(--gradient);
+  position: relative;
+  overflow: hidden;
 }
 
-.profil-container { text-align: center; max-width: 800px; }
+.profil-container {
+  text-align: center;
+  max-width: 800px;
+  position: relative;
+  z-index: 1;
+}
 
 .profil-container h1 { font-size: 28px; margin-bottom: 8px; }
 
@@ -707,9 +732,6 @@ input, textarea, select {
   max-width: 95vw;
 }
 
-/* Animation "secousse" déclenchée quand l'utilisateur clique sur le fond
-   d'une modale qui n'autorise pas la fermeture par backdrop. Indique
-   visuellement qu'il faut utiliser la croix ou Annuler. */
 @keyframes modal-shake {
   0%, 100% { transform: translateX(0); }
   15% { transform: translateX(-8px); }
@@ -724,7 +746,6 @@ input, textarea, select {
   animation: modal-shake 0.4s ease-in-out;
 }
 
-/* Bloc "À propos" en bas de la page Compte & Sécurité */
 .about-block {
   text-align: center;
   background: var(--bg-2);
@@ -1066,8 +1087,6 @@ label.radio input[type="radio"] {
    PHASE 2 — Artisan : KPV, équipement, kanban, logistique
    ============================================================ */
 
-/* ---------- Bloc résultat KPV / équipement ---------- */
-
 .kpv-result-block {
   display: flex;
   align-items: center;
@@ -1243,7 +1262,7 @@ label.radio input[type="radio"] {
   transition: width 0.3s;
 }
 
-/* ---------- Tableau breakdown KPV (méthode BTP cascade) ---------- */
+/* ---------- Tableau breakdown KPV ---------- */
 
 .kpv-breakdown {
   margin-top: 8px;
@@ -1276,7 +1295,8 @@ label.radio input[type="radio"] {
   color: rgba(255, 255, 255, 0.75);
 }
 
-/* ---------- Onglets (tabs) ---------- */
+/* ---------- Onglets souligne (Phase 2 — pages internes) ---------- */
+/* Scopés à .tabs-bar pour ne pas écraser les onglets pilule de l'auth */
 
 .tabs-bar {
   display: flex;
@@ -1285,7 +1305,7 @@ label.radio input[type="radio"] {
   margin: 16px 0 0;
 }
 
-.tab {
+.tabs-bar .tab {
   background: transparent;
   border: none;
   padding: 10px 18px;
@@ -1299,11 +1319,11 @@ label.radio input[type="radio"] {
   transition: color 0.15s, border-color 0.15s;
 }
 
-.tab:hover {
+.tabs-bar .tab:hover {
   color: var(--text);
 }
 
-.tab.active {
+.tabs-bar .tab.active {
   color: var(--primary);
   border-bottom-color: var(--primary);
   font-weight: 500;
@@ -1407,4 +1427,241 @@ label.radio input[type="radio"] {
   width: 18px;
   height: 18px;
   accent-color: var(--primary);
+}
+
+/* ============================================================
+   NOUVEAU — BrandMark (atome animé)
+   ============================================================ */
+
+.brand-mark {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.brand-mark svg {
+  display: block;
+  filter: drop-shadow(0 4px 12px rgba(91, 141, 239, 0.25));
+}
+
+/* Tuile : navy profond cohérent avec le thème sombre */
+.brand-mark .bm-tile {
+  fill: #161629;
+  stroke: rgba(91, 141, 239, 0.25);
+  stroke-width: 1;
+}
+
+/* Orbites : ellipses fines bleu primaire */
+.brand-mark .bm-orbit {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 0.9;
+  stroke-opacity: 0.55;
+}
+
+/* Noyau : or chaud */
+.brand-mark .bm-nucleus {
+  fill: #ffe9a8;
+  filter: drop-shadow(0 0 4px rgba(255, 213, 110, 0.6));
+}
+
+/* Électrons : 3 cercles bleus en orbite */
+.brand-mark .bm-electron {
+  transform-origin: 0 0;
+}
+
+.brand-mark .bm-electron circle {
+  fill: var(--primary);
+  filter: drop-shadow(0 0 3px rgba(91, 141, 239, 0.7));
+}
+
+.brand-mark .bm-electron.e1 { animation: bm-orbit-1 6s linear infinite; }
+.brand-mark .bm-electron.e2 { animation: bm-orbit-2 7.5s linear infinite; animation-delay: -2s; }
+.brand-mark .bm-electron.e3 { animation: bm-orbit-3 9s linear infinite; animation-delay: -4s; }
+
+@keyframes bm-orbit-1 {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes bm-orbit-2 {
+  from { transform: rotate(60deg); }
+  to   { transform: rotate(420deg); }
+}
+@keyframes bm-orbit-3 {
+  from { transform: rotate(120deg); }
+  to   { transform: rotate(480deg); }
+}
+
+/* Variante small (sidebar) */
+.brand-mark.small {
+  width: 40px;
+  height: 40px;
+}
+
+/* Adaptation thème clair : tuile reste navy pour le contraste */
+:root[data-theme="light"] .brand-mark .bm-tile {
+  fill: #161629;
+  stroke: transparent;
+}
+:root[data-theme="light"] .brand-mark svg {
+  filter: drop-shadow(0 4px 12px rgba(74, 114, 201, 0.18));
+}
+
+/* Adaptation thème beige : ton plus chaud, orbites cuivre */
+:root[data-theme="beige"] .brand-mark .bm-tile {
+  fill: #2d2418;
+  stroke: rgba(184, 115, 51, 0.3);
+}
+:root[data-theme="beige"] .brand-mark .bm-orbit {
+  stroke: #c98e4e;
+}
+:root[data-theme="beige"] .brand-mark .bm-nucleus {
+  fill: #ffd99a;
+}
+:root[data-theme="beige"] .brand-mark .bm-electron circle {
+  fill: #d9a76a;
+  filter: drop-shadow(0 0 3px rgba(217, 167, 106, 0.7));
+}
+:root[data-theme="beige"] .brand-mark svg {
+  filter: drop-shadow(0 4px 12px rgba(139, 90, 43, 0.25));
+}
+
+/* ============================================================
+   NOUVEAU — Fond animé écrans auth + profil
+   ============================================================ */
+
+.auth-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.auth-bg-orbits {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.5;
+}
+
+.auth-bg-orbit {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 0.6;
+  stroke-opacity: 0.4;
+  transform-origin: 600px 400px;
+}
+
+.auth-bg-orbit.o1 { animation: auth-bg-spin 40s linear infinite; }
+.auth-bg-orbit.o2 { animation: auth-bg-spin 60s linear infinite reverse; }
+.auth-bg-orbit.o3 { animation: auth-bg-spin 50s linear infinite; }
+
+@keyframes auth-bg-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.auth-bg-particles {
+  position: absolute;
+  inset: 0;
+}
+
+.auth-bg-particles span {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--primary);
+  opacity: 0.35;
+  filter: blur(0.5px);
+  animation: auth-bg-float 18s ease-in-out infinite;
+}
+
+.auth-bg-particles span:nth-child(1) { left: 12%; top: 22%; animation-delay: 0s;   animation-duration: 20s; }
+.auth-bg-particles span:nth-child(2) { left: 78%; top: 18%; animation-delay: -3s;  animation-duration: 22s; }
+.auth-bg-particles span:nth-child(3) { left: 24%; top: 72%; animation-delay: -6s;  animation-duration: 24s; }
+.auth-bg-particles span:nth-child(4) { left: 88%; top: 64%; animation-delay: -9s;  animation-duration: 18s; }
+.auth-bg-particles span:nth-child(5) { left: 56%; top: 12%; animation-delay: -12s; animation-duration: 26s; }
+.auth-bg-particles span:nth-child(6) { left: 8%;  top: 52%; animation-delay: -2s;  animation-duration: 19s; }
+.auth-bg-particles span:nth-child(7) { left: 92%; top: 38%; animation-delay: -7s;  animation-duration: 23s; }
+.auth-bg-particles span:nth-child(8) { left: 44%; top: 84%; animation-delay: -11s; animation-duration: 21s; }
+
+@keyframes auth-bg-float {
+  0%, 100% { transform: translate(0, 0); opacity: 0.35; }
+  25%      { transform: translate(20px, -30px); opacity: 0.6; }
+  50%      { transform: translate(-15px, -50px); opacity: 0.4; }
+  75%      { transform: translate(-30px, -20px); opacity: 0.55; }
+}
+
+/* Adaptation thème clair : moins intense */
+:root[data-theme="light"] .auth-bg-orbit { stroke-opacity: 0.25; }
+:root[data-theme="light"] .auth-bg-particles span { opacity: 0.25; }
+
+/* Adaptation thème beige : tons cuivrés */
+:root[data-theme="beige"] .auth-bg-orbit { stroke: #b87333; stroke-opacity: 0.35; }
+:root[data-theme="beige"] .auth-bg-particles span { background: #b87333; opacity: 0.3; }
+
+/* ============================================================
+   NOUVEAU — Champ mot de passe avec œil
+   ============================================================ */
+
+.password-field {
+  position: relative;
+  display: block;
+}
+
+.password-field input {
+  width: 100%;
+  padding-right: 42px !important;
+}
+
+.pwd-toggle {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  padding: 0;
+}
+
+.pwd-toggle:hover {
+  background: var(--bg-3);
+  color: var(--text);
+}
+
+.pwd-toggle svg {
+  display: block;
+}
+
+/* État par défaut : œil ouvert visible, œil barré caché */
+.pwd-toggle .pwd-eye-off { display: none; }
+
+/* État "afficher" : on inverse */
+.pwd-toggle.is-shown .pwd-eye     { display: none; }
+.pwd-toggle.is-shown .pwd-eye-off { display: block; }
+.pwd-toggle.is-shown { color: var(--primary); }
+
+/* ============================================================
+   prefers-reduced-motion : on coupe les animations
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-mark .bm-electron,
+  .auth-bg-orbit,
+  .auth-bg-particles span {
+    animation: none !important;
+  }
 }
